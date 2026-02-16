@@ -183,38 +183,20 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   }, 'Text rendering settings');
 
   try {
-    // Step 1: Process reaction - scale, trim, add text overlay, optionally add music
-    logger.debug({ tmpReaction, musicPath }, 'Processing reaction');
-    
-    if (musicPath && fs.existsSync(musicPath)) {
-      // With music: mix music track with video
-      await runFFmpeg([
-        '-y',
-        '-i', reactionPath,
-        '-i', musicPath,
-        '-filter_complex',
-        `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v];[1:a]volume=${musicVolume},atrim=0:${reactionDuration},asetpts=PTS-STARTPTS[a]`,
-        '-map', '[v]', '-map', '[a]',
-        '-t', String(reactionDuration),
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
-        '-c:a', 'aac', '-b:a', '128k', '-shortest',
-        tmpReaction
-      ]);
-    } else {
-      // Without music: use silent audio
-      await runFFmpeg([
-        '-y',
-        '-i', reactionPath,
-        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
-        '-filter_complex',
-        `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
-        '-map', '[v]', '-map', '1:a',
-        '-t', String(reactionDuration),
-        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
-        '-c:a', 'aac', '-b:a', '128k', '-shortest',
-        tmpReaction
-      ]);
-    }
+    // Step 1: Process reaction - scale, trim, add text overlay (silent audio - music added at end)
+    logger.debug({ tmpReaction }, 'Processing reaction');
+    await runFFmpeg([
+      '-y',
+      '-i', reactionPath,
+      '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+      '-filter_complex',
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
+      '-map', '[v]', '-map', '1:a',
+      '-t', String(reactionDuration),
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+      '-c:a', 'aac', '-b:a', '128k', '-shortest',
+      tmpReaction
+    ]);
 
     // Step 2: Process demo - scale to match
     logger.debug({ tmpDemo }, 'Processing demo');
@@ -234,18 +216,47 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
     logger.debug({ outputPath }, 'Concatenating videos');
     fs.writeFileSync(concatList, `file '${path.resolve(tmpReaction)}'\nfile '${path.resolve(tmpDemo)}'`);
 
+    const tmpConcat = outputPath.replace('.mp4', '_tmp_concat.mp4');
+    
     await runFFmpeg([
       '-y',
       '-f', 'concat', '-safe', '0', '-i', concatList,
       '-c', 'copy',
-      outputPath
+      tmpConcat
     ]);
+
+    // Step 4: Add music to entire video (if provided)
+    if (musicPath && fs.existsSync(musicPath)) {
+      logger.debug({ outputPath, musicPath }, 'Adding music to full video');
+      await runFFmpeg([
+        '-y',
+        '-i', tmpConcat,
+        '-i', musicPath,
+        '-filter_complex',
+        `[1:a]volume=${musicVolume},aloop=loop=-1:size=2e+09[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]`,
+        '-map', '0:v',
+        '-map', '[a]',
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '192k',
+        '-shortest',
+        outputPath
+      ]);
+      
+      // Cleanup concat temp
+      if (fs.existsSync(tmpConcat)) {
+        fs.unlinkSync(tmpConcat);
+      }
+    } else {
+      // No music - just rename concat to output
+      fs.renameSync(tmpConcat, outputPath);
+    }
 
     logger.info({ outputPath }, 'Video generated successfully');
     return outputPath;
   } finally {
     // Cleanup temp files
-    [tmpReaction, tmpDemo, concatList, textFilePath].forEach((f) => {
+    const tmpConcat = outputPath.replace('.mp4', '_tmp_concat.mp4');
+    [tmpReaction, tmpDemo, concatList, textFilePath, tmpConcat].forEach((f) => {
       if (fs.existsSync(f)) {
         try {
           fs.unlinkSync(f);
