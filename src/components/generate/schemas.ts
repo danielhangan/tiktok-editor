@@ -20,6 +20,13 @@ const AudioSettingsSchema = z.object({
   musicVolume: z.number().min(0).max(1).default(0.3) // 0-1, default 30%
 }).optional();
 
+const TrimSettingsSchema = z.object({
+  reactionStart: z.number().min(0).optional(),
+  reactionDuration: z.number().min(0.1).optional(),
+  demoStart: z.number().min(0).optional(),
+  demoDuration: z.number().min(0.1).optional()
+}).optional();
+
 const JobStatusSchema = z.object({
   id: z.string(),
   state: z.string(),
@@ -43,7 +50,8 @@ export const generateRoute = createRoute({
           schema: z.object({
             combinations: z.array(CombinationSchema),
             textSettings: TextSettingsSchema,
-            audioSettings: AudioSettingsSchema
+            audioSettings: AudioSettingsSchema,
+            trimSettings: TrimSettingsSchema
           })
         }
       }

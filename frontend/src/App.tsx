@@ -145,6 +145,12 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [isRefreshing, setIsRefreshing] = useState(false)
+  
+  // Trim settings
+  const [templateStart, setTemplateStart] = useState('')
+  const [templateDuration, setTemplateDuration] = useState('')
+  const [demoStart, setDemoStart] = useState('')
+  const [demoDuration, setDemoDuration] = useState('')
 
   // All available templates (library + uploads)
   const allTemplates = [
@@ -290,7 +296,13 @@ function App() {
         body: JSON.stringify({
           combinations,
           textSettings: { maxWidthPercent: 60, fontSize: 38, align: 'center', position: textPosition },
-          audioSettings: { musicVolume: parseFloat(musicVolume) }
+          audioSettings: { musicVolume: parseFloat(musicVolume) },
+          trimSettings: {
+            reactionStart: templateStart ? parseFloat(templateStart) : undefined,
+            reactionDuration: templateDuration ? parseFloat(templateDuration) : undefined,
+            demoStart: demoStart ? parseFloat(demoStart) : undefined,
+            demoDuration: demoDuration ? parseFloat(demoDuration) : undefined
+          }
         })
       })
       
@@ -432,6 +444,39 @@ function App() {
               <p className="text-xs text-muted-foreground mt-3">
                 {libraryReactions.length} DansUGC Brolls{uploadedReactions.length > 0 && ` + ${uploadedReactions.length} uploads`}
               </p>
+              
+              {/* Template trim controls */}
+              {selectedTemplate && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Trim UGC Reaction (optional)</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground">Start (sec)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={templateStart}
+                        onChange={(e) => setTemplateStart(e.target.value)}
+                        placeholder="0"
+                        className="w-full h-9 px-3 bg-muted/30 border border-border rounded-lg text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground">Duration (sec)</label>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={templateDuration}
+                        onChange={(e) => setTemplateDuration(e.target.value)}
+                        placeholder="Full"
+                        className="w-full h-9 px-3 bg-muted/30 border border-border rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Call to Action */}
@@ -471,6 +516,39 @@ function App() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              
+              {/* Demo trim controls */}
+              {demos.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Trim Demo Videos (optional)</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground">Start (sec)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={demoStart}
+                        onChange={(e) => setDemoStart(e.target.value)}
+                        placeholder="0"
+                        className="w-full h-9 px-3 bg-muted/30 border border-border rounded-lg text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground">Duration (sec)</label>
+                      <input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={demoDuration}
+                        onChange={(e) => setDemoDuration(e.target.value)}
+                        placeholder="Full"
+                        className="w-full h-9 px-3 bg-muted/30 border border-border rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

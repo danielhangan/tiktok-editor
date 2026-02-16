@@ -34,7 +34,12 @@ export const GenerateVideoDataSchema = z.object({
   textPosition: z.enum(['top', 'center', 'bottom']).default('center'),
   // Audio options
   musicPath: z.string().optional(),
-  musicVolume: z.number().min(0).max(1).default(0.3)
+  musicVolume: z.number().min(0).max(1).default(0.3),
+  // Trim options
+  reactionTrimStart: z.number().min(0).optional(),
+  reactionTrimDuration: z.number().min(0.1).optional(),
+  demoTrimStart: z.number().min(0).optional(),
+  demoTrimDuration: z.number().min(0.1).optional()
 });
 
 export type GenerateVideoData = z.infer<typeof GenerateVideoDataSchema>;

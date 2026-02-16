@@ -11,7 +11,7 @@ import { generateTikTokVideo } from '~/utils/ffmpeg.js';
 export function registerGenerateRoutes(app: OpenAPIHono) {
   app.openapi(generateRoute, async (c) => {
     const sessionId = c.req.header('x-session-id') || 'default';
-    const { combinations, textSettings, audioSettings } = c.req.valid('json');
+    const { combinations, textSettings, audioSettings, trimSettings } = c.req.valid('json');
 
     if (!combinations || combinations.length === 0) {
       return c.json({ error: 'No combinations specified' }, 400);
@@ -69,7 +69,12 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
         textPosition: textSettings?.position ?? 'center',
         // Audio options
         musicPath,
-        musicVolume: audioSettings?.musicVolume ?? 0.3
+        musicVolume: audioSettings?.musicVolume ?? 0.3,
+        // Trim options
+        reactionTrimStart: trimSettings?.reactionStart,
+        reactionTrimDuration: trimSettings?.reactionDuration,
+        demoTrimStart: trimSettings?.demoStart,
+        demoTrimDuration: trimSettings?.demoDuration
       };
 
       const jobId = await addJob(jobData);

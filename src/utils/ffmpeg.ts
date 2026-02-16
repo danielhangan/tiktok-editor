@@ -149,6 +149,15 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   // Audio settings
   const musicPath = data.musicPath;
   const musicVolume = data.musicVolume ?? 0.3;
+  
+  // Trim settings
+  const reactionTrimStart = data.reactionTrimStart ?? 0;
+  const reactionTrimDuration = data.reactionTrimDuration; // undefined = full length
+  const demoTrimStart = data.demoTrimStart ?? 0;
+  const demoTrimDuration = data.demoTrimDuration; // undefined = full length
+  
+  // Use custom trim duration for reaction if specified, otherwise use default
+  const actualReactionDuration = reactionTrimDuration ?? reactionDuration;
 
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -184,29 +193,36 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
 
   try {
     // Step 1: Process reaction - scale, trim, add text overlay (silent audio - music added at end)
-    logger.debug({ tmpReaction }, 'Processing reaction');
+    logger.debug({ tmpReaction, reactionTrimStart, actualReactionDuration }, 'Processing reaction');
+    const reactionInputArgs = reactionTrimStart > 0 ? ['-ss', String(reactionTrimStart)] : [];
     await runFFmpeg([
       '-y',
+      ...reactionInputArgs,
       '-i', reactionPath,
       '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
       '-filter_complex',
-      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${actualReactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
       '-map', '[v]', '-map', '1:a',
-      '-t', String(reactionDuration),
+      '-t', String(actualReactionDuration),
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
       '-c:a', 'aac', '-b:a', '128k', '-shortest',
       tmpReaction
     ]);
 
-    // Step 2: Process demo - scale to match
-    logger.debug({ tmpDemo }, 'Processing demo');
+    // Step 2: Process demo - scale to match, optionally trim
+    logger.debug({ tmpDemo, demoTrimStart, demoTrimDuration }, 'Processing demo');
+    const demoInputArgs = demoTrimStart > 0 ? ['-ss', String(demoTrimStart)] : [];
+    const demoTrimFilter = demoTrimDuration ? `,trim=0:${demoTrimDuration},setpts=PTS-STARTPTS` : '';
+    const demoDurationArgs = demoTrimDuration ? ['-t', String(demoTrimDuration)] : [];
     await runFFmpeg([
       '-y',
+      ...demoInputArgs,
       '-i', demoPath,
       '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
       '-filter_complex',
-      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[v]`,
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2${demoTrimFilter}[v]`,
       '-map', '[v]', '-map', '1:a',
+      ...demoDurationArgs,
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
       '-c:a', 'aac', '-b:a', '128k', '-shortest',
       tmpDemo
