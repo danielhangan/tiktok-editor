@@ -72,19 +72,20 @@ function wrapText(text: string, options: TextOptions): string {
 
 function escapeFFmpegText(text: string): string {
   // FFmpeg drawtext filter escaping
-  // We wrap text in single quotes, so we need to handle special chars
+  // Note: FFmpeg filter syntax does its own unescaping, so newlines need \\n
   
-  // 1. Escape backslashes first (must be before newline replacement)
-  let escaped = text.replace(/\\/g, '\\\\');
+  // 1. Escape backslashes first
+  let escaped = text.replace(/\\/g, '\\\\\\\\');
   
   // 2. Escape single quotes for FFmpeg filter syntax
-  escaped = escaped.replace(/'/g, "\\'");
+  escaped = escaped.replace(/'/g, "\\\\'");
   
   // 3. Escape colons (FFmpeg filter option separator)
-  escaped = escaped.replace(/:/g, '\\:');
+  escaped = escaped.replace(/:/g, '\\\\:');
   
-  // 4. Convert newlines to \n for FFmpeg drawtext
-  escaped = escaped.replace(/\n/g, '\\n');
+  // 4. Convert newlines - need double backslash for FFmpeg filter parsing
+  // FFmpeg filter unescapes \\n -> \n, then drawtext interprets \n as newline
+  escaped = escaped.replace(/\n/g, '\\\\n');
   
   return escaped;
 }
