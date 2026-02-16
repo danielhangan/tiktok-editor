@@ -503,7 +503,7 @@ function App() {
                     useLibrary ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  Stock ({libraryReactions.length})
+                  DansUGC Brolls ({libraryReactions.length})
                 </button>
               </div>
             </div>
@@ -531,7 +531,7 @@ function App() {
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-3 text-center">
-                  {singleMode ? 'Click to select one' : `${libraryReactions.length} stock reactions`}
+                  {singleMode ? 'Click to select one' : `${libraryReactions.length} DansUGC Brolls`}
                 </p>
               </div>
             ) : (
