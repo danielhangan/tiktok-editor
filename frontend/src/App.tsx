@@ -18,7 +18,7 @@ interface Output {
 }
 
 // Clean video player component
-function VideoCard({ video }: { video: Output }) {
+function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isMuted, setIsMuted] = useState(true)
@@ -130,6 +130,12 @@ function VideoCard({ video }: { video: Output }) {
             >
               <Download className="w-4 h-4 text-white" />
             </a>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(video.id) }}
+              className="p-2 hover:bg-red-500/50 rounded-full transition-colors"
+            >
+              <Trash2 className="w-4 h-4 text-white" />
+            </button>
           </div>
         </div>
       </div>
@@ -175,6 +181,11 @@ function App() {
   const loadOutputs = async () => {
     const res = await api('/api/outputs')
     setOutputs(await res.json())
+  }
+
+  const deleteOutput = async (id: string) => {
+    await api(`/api/outputs/${id}`, { method: 'DELETE' })
+    setOutputs(outputs.filter(o => o.id !== id))
   }
 
   const uploadFiles = async (type: string, files: FileList) => {
@@ -521,7 +532,7 @@ function App() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {outputs.map(o => (
-                <VideoCard key={o.id} video={o} />
+                <VideoCard key={o.id} video={o} onDelete={deleteOutput} />
               ))}
             </div>
           )}
