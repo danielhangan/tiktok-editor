@@ -3,7 +3,6 @@ import { extractAudioRoute } from './schemas.js';
 import { env } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { ensureSessionDirectories } from '~/utils/storage.js';
-import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -11,114 +10,47 @@ import { randomUUID } from 'crypto';
 const SCRAPECREATORS_API = 'https://api.scrapecreators.com/v2/tiktok/video';
 const API_KEY = env.SCRAPECREATORS_API_KEY || 'Z5CXYvudpCavvlegnm0CS8jVuxc2';
 
-interface TikTokVideoResponse {
+interface TikTokResponse {
   success: boolean;
   credits_remaining?: number;
-  data?: any; // TikTok returns complex nested structure
+  aweme_detail?: {
+    desc?: string;
+    music?: {
+      title?: string;
+      author?: string;
+      play_url?: {
+        url_list?: string[];
+        uri?: string;
+      };
+    };
+    author?: {
+      nickname?: string;
+      unique_id?: string;
+    };
+  };
   error?: string;
   message?: string;
 }
 
-// Helper to recursively find a URL in the response
-function findVideoUrl(obj: any, depth = 0): string | null {
-  if (depth > 10 || !obj) return null;
-  
-  // Direct URL fields to check
-  const urlFields = ['downloadAddr', 'playAddr', 'download_addr', 'play_addr', 'downloadUrl', 'playUrl'];
-  
-  for (const field of urlFields) {
-    if (obj[field] && typeof obj[field] === 'string' && obj[field].startsWith('http')) {
-      return obj[field];
-    }
-  }
-  
-  // Check url_list arrays
-  if (obj.url_list && Array.isArray(obj.url_list) && obj.url_list[0]) {
-    return obj.url_list[0];
-  }
-  
-  // Check video object
-  if (obj.video) {
-    const videoUrl = findVideoUrl(obj.video, depth + 1);
-    if (videoUrl) return videoUrl;
-  }
-  
-  // Check play_addr object (TikTok API structure)
-  if (obj.play_addr) {
-    const playUrl = findVideoUrl(obj.play_addr, depth + 1);
-    if (playUrl) return playUrl;
-  }
-  
-  // Check download_addr object
-  if (obj.download_addr) {
-    const dlUrl = findVideoUrl(obj.download_addr, depth + 1);
-    if (dlUrl) return dlUrl;
-  }
-  
-  return null;
-}
-
-function findMusicInfo(obj: any): { title?: string; author?: string } {
-  if (!obj) return {};
-  
-  // Check music object
-  if (obj.music) {
-    return {
-      title: obj.music.title || obj.music.musicName,
-      author: obj.music.author || obj.music.authorName
-    };
-  }
-  
-  // Check for desc/description as fallback title
-  return {
-    title: obj.desc || obj.description || obj.title,
-    author: obj.author?.nickname || obj.author?.uniqueId
-  };
-}
-
 async function downloadFile(url: string, destPath: string): Promise<void> {
+  logger.debug({ url: url.slice(0, 100) + '...' }, 'Downloading file');
+  
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://www.tiktok.com/'
     }
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to download: ${response.status}`);
+    throw new Error(`Download failed: ${response.status} ${response.statusText}`);
   }
   
   const buffer = await response.arrayBuffer();
   fs.writeFileSync(destPath, Buffer.from(buffer));
-}
-
-function extractAudioFFmpeg(videoPath: string, audioPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const process = spawn('ffmpeg', [
-      '-y',
-      '-i', videoPath,
-      '-vn',                    // No video
-      '-acodec', 'libmp3lame',  // MP3 codec
-      '-ab', '192k',            // Bitrate
-      '-ar', '44100',           // Sample rate
-      audioPath
-    ]);
-
-    let stderr = '';
-    process.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    process.on('close', (code) => {
-      if (code !== 0) {
-        logger.error({ code, stderr: stderr.slice(-500) }, 'FFmpeg audio extraction failed');
-        reject(new Error(`FFmpeg exited with code ${code}`));
-      } else {
-        resolve();
-      }
-    });
-
-    process.on('error', reject);
-  });
+  logger.debug({ destPath, size: buffer.byteLength }, 'File downloaded');
 }
 
 export function registerTikTokRoutes(app: OpenAPIHono) {
@@ -137,8 +69,15 @@ export function registerTikTokRoutes(app: OpenAPIHono) {
         }
       });
 
-      const data: TikTokVideoResponse = await response.json();
+      const data: TikTokResponse = await response.json();
       
+      logger.debug({ 
+        success: data.success,
+        hasAwemeDetail: !!data.aweme_detail,
+        hasMusic: !!data.aweme_detail?.music,
+        hasMusicUrl: !!data.aweme_detail?.music?.play_url?.url_list?.[0]
+      }, 'TikTok API response');
+
       if (!data.success) {
         logger.error({ error: data.error, message: data.message }, 'Scrapecreators API error');
         return c.json({ 
@@ -147,26 +86,26 @@ export function registerTikTokRoutes(app: OpenAPIHono) {
         }, 400);
       }
 
-      // Log the response structure for debugging
-      logger.debug({ 
-        hasData: !!data.data,
-        dataKeys: data.data ? Object.keys(data.data).slice(0, 20) : null
-      }, 'TikTok API response structure');
-
-      // 2. Get download URL - search recursively through the response
-      const videoUrl = findVideoUrl(data.data) || findVideoUrl(data);
-
-      if (!videoUrl) {
-        logger.error({ 
-          dataSnapshot: JSON.stringify(data).slice(0, 1000) 
-        }, 'No download URL found in response');
+      const aweme = data.aweme_detail;
+      if (!aweme) {
         return c.json({ 
-          error: 'No download URL found',
-          message: 'Could not find video download link in API response'
+          error: 'Invalid response',
+          message: 'No video details in API response'
         }, 400);
       }
 
-      logger.info({ videoUrl: videoUrl.slice(0, 100) + '...' }, 'Found video URL');
+      // 2. Get music URL directly (it's already an MP3!)
+      const musicUrl = aweme.music?.play_url?.url_list?.[0] || aweme.music?.play_url?.uri;
+
+      if (!musicUrl) {
+        logger.error({ music: aweme.music }, 'No music URL found');
+        return c.json({ 
+          error: 'No music URL found',
+          message: 'Could not find audio in this TikTok'
+        }, 400);
+      }
+
+      logger.info({ musicUrl: musicUrl.slice(0, 80) + '...' }, 'Found music URL');
 
       // 3. Setup paths
       ensureSessionDirectories(sessionId);
@@ -174,44 +113,33 @@ export function registerTikTokRoutes(app: OpenAPIHono) {
       const musicDir = path.join(env.DATA_DIR, 'sessions', safeSessionId, 'uploads', 'music');
       
       const id = randomUUID();
-      const tmpVideoPath = path.join('/tmp', `tiktok_${id}.mp4`);
       
-      // Generate filename from music info or video title
-      const musicInfo = findMusicInfo(data.data) || findMusicInfo(data);
-      const musicTitle = musicInfo.title || 'tiktok_sound';
-      const musicAuthor = musicInfo.author || '';
-      const safeTitle = musicTitle.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 50).trim();
+      // Generate filename from music info
+      const musicTitle = aweme.music?.title || aweme.desc || 'tiktok_sound';
+      const musicAuthor = aweme.music?.author || aweme.author?.nickname || '';
+      const safeTitle = musicTitle.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 50).trim() || 'tiktok_sound';
       const filename = `${safeTitle}_${id.slice(0, 8)}.mp3`;
       const audioPath = path.join(musicDir, filename);
 
-      // 4. Download video
-      logger.debug({ videoUrl, tmpVideoPath }, 'Downloading TikTok video');
-      await downloadFile(videoUrl, tmpVideoPath);
+      // 4. Download the MP3 directly
+      logger.debug({ musicUrl, audioPath }, 'Downloading music');
+      await downloadFile(musicUrl, audioPath);
 
-      // 5. Extract audio
-      logger.debug({ tmpVideoPath, audioPath }, 'Extracting audio');
-      await extractAudioFFmpeg(tmpVideoPath, audioPath);
-
-      // 6. Cleanup temp video
-      try {
-        fs.unlinkSync(tmpVideoPath);
-      } catch {
-        // Ignore cleanup errors
-      }
-
-      // 7. Verify audio file exists
+      // 5. Verify file exists
       if (!fs.existsSync(audioPath)) {
         return c.json({ 
-          error: 'Audio extraction failed',
-          message: 'Could not extract audio from video'
+          error: 'Download failed',
+          message: 'Could not save audio file'
         }, 500);
       }
 
+      const stats = fs.statSync(audioPath);
       logger.info({ 
         musicId: id, 
         filename, 
         title: musicTitle,
         author: musicAuthor,
+        size: stats.size,
         sessionId 
       }, 'Audio extracted successfully');
 
