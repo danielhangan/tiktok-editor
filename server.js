@@ -9,22 +9,21 @@ const { spawn } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3456;
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static('public'));
-app.use('/output', express.static(OUTPUT_DIR));
-app.use('/uploads', express.static(UPLOADS_DIR));
-
 // Use persistent volume in production, local in dev
 const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || '.';
 const UPLOADS_DIR = `${DATA_DIR}/uploads`;
 const OUTPUT_DIR = `${DATA_DIR}/output`;
 
 // Ensure directories exist
-const fs_sync = require('fs');
 [`${UPLOADS_DIR}/reactions`, `${UPLOADS_DIR}/demos`, OUTPUT_DIR].forEach(dir => {
-  if (!fs_sync.existsSync(dir)) fs_sync.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+app.use('/output', express.static(OUTPUT_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // Storage config
 const storage = multer.diskStorage({
