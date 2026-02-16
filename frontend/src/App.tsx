@@ -509,28 +509,44 @@ function App() {
             </div>
             
             {useLibrary ? (
-              <div className="border-2 border-border rounded-xl p-4 bg-muted/20">
-                {singleMode ? (
-                  <>
-                    <p className="text-xs text-muted-foreground mb-3">Select one Broll:</p>
-                    <select
-                      value={selectedReaction}
-                      onChange={(e) => setSelectedReaction(e.target.value)}
-                      className="w-full h-10 px-3 bg-background border border-border rounded-lg text-sm"
+              <div className="border-2 border-border rounded-xl p-3 bg-muted/20">
+                <p className="text-xs text-muted-foreground mb-2">
+                  {singleMode ? 'Click to select one:' : `All ${libraryReactions.length} Brolls will be used:`}
+                </p>
+                <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
+                  {libraryReactions.map(f => (
+                    <div 
+                      key={f.id}
+                      onClick={() => singleMode && setSelectedReaction(f.id)}
+                      className={cn(
+                        "relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer transition-all",
+                        singleMode && selectedReaction === f.id 
+                          ? "ring-2 ring-primary ring-offset-2" 
+                          : singleMode ? "hover:ring-2 hover:ring-muted-foreground" : "opacity-90"
+                      )}
                     >
-                      <option value="">Choose a Broll...</option>
-                      {libraryReactions.map(f => (
-                        <option key={f.id} value={f.id}>{f.filename}</option>
-                      ))}
-                    </select>
-                  </>
-                ) : (
-                  <div className="text-center py-6">
-                    <div className="text-3xl font-bold text-foreground">{libraryReactions.length}</div>
-                    <p className="text-sm text-muted-foreground mt-1">DansUGC Brolls ready</p>
-                    <p className="text-xs text-muted-foreground mt-2">All will be combined with your demos</p>
-                  </div>
-                )}
+                      <video
+                        src={f.url}
+                        className="w-full h-full object-cover"
+                        muted
+                        playsInline
+                        preload="metadata"
+                        onMouseEnter={(e) => e.currentTarget.play()}
+                        onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                      />
+                      {singleMode && selectedReaction === f.id && (
+                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                            <span className="text-white text-xs">✓</span>
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 to-transparent">
+                        <p className="text-[10px] text-white truncate">{f.filename.replace(/\.(mov|mp4)$/i, '')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <>
