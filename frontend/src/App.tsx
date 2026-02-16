@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Upload, Music, Type, Sparkles, Play, Pause, Trash2, Link, Loader2, Download, Volume2, VolumeX } from 'lucide-react'
+import { Upload, Music, Type, Sparkles, Play, Pause, Trash2, Link, Loader2, Download, Volume2, VolumeX, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn, formatBytes, api } from '@/lib/utils'
+import { useToast } from '@/components/ui/toast'
 
 interface FileInfo {
   id: string
@@ -144,6 +145,7 @@ function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) 
 }
 
 function App() {
+  const { toast, update } = useToast()
   const [reactions, setReactions] = useState<FileInfo[]>([])
   const [demos, setDemos] = useState<FileInfo[]>([])
   const [music, setMusic] = useState<FileInfo[]>([])
@@ -156,6 +158,7 @@ function App() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Load initial data
   useEffect(() => {
@@ -178,14 +181,20 @@ function App() {
     setHooksText(data.join('\n'))
   }
 
-  const loadOutputs = async () => {
+  const loadOutputs = async (showToast = false) => {
+    if (showToast) setIsRefreshing(true)
     const res = await api('/api/outputs')
     setOutputs(await res.json())
+    if (showToast) {
+      toast('Videos refreshed')
+      setIsRefreshing(false)
+    }
   }
 
   const deleteOutput = async (id: string) => {
     await api(`/api/outputs/${id}`, { method: 'DELETE' })
     setOutputs(outputs.filter(o => o.id !== id))
+    toast('Video deleted')
   }
 
   const uploadFiles = async (type: string, files: FileList) => {
@@ -214,12 +223,18 @@ function App() {
       body: JSON.stringify({ hooks: newHooks })
     })
     setHooks(newHooks)
+    toast(`${newHooks.length} hooks saved`)
   }
 
   const extractTikTok = async () => {
-    if (!tiktokUrl.trim() || !tiktokUrl.includes('tiktok.com')) return
+    if (!tiktokUrl.trim() || !tiktokUrl.includes('tiktok.com')) {
+      toast('Enter a valid TikTok URL', 'error')
+      return
+    }
     
     setIsExtracting(true)
+    const toastId = toast('Extracting audio...', 'loading')
+    
     try {
       const res = await api('/api/tiktok/extract-audio', {
         method: 'POST',
@@ -230,14 +245,22 @@ function App() {
       if (data.success) {
         setTiktokUrl('')
         setMusic(await loadFiles('music'))
+        update(toastId, `Added: ${data.title || 'TikTok audio'}`, 'success')
+      } else {
+        update(toastId, data.message || 'Extraction failed', 'error')
       }
+    } catch {
+      update(toastId, 'Extraction failed', 'error')
     } finally {
       setIsExtracting(false)
     }
   }
 
   const generate = async () => {
-    if (!reactions.length || !demos.length) return
+    if (!reactions.length || !demos.length) {
+      toast('Upload reactions and demos first', 'error')
+      return
+    }
     
     setIsGenerating(true)
     const combinations = []
@@ -257,6 +280,7 @@ function App() {
     }
     
     setProgress({ current: 0, total: combinations.length })
+    toast(`Generating ${combinations.length} videos...`, 'loading')
     
     try {
       const res = await api('/api/generate', {
@@ -275,6 +299,7 @@ function App() {
         pollJobs(data.jobIds)
       }
     } catch {
+      toast('Generation failed', 'error')
       setIsGenerating(false)
     }
   }
@@ -285,12 +310,16 @@ function App() {
     const check = async () => {
       completed = 0
       let allDone = true
+      let failed = 0
       
       for (const id of jobIds) {
         const res = await api(`/api/jobs/${id}`)
         const job = await res.json()
-        if (job.state === 'completed' || job.state === 'failed') {
+        if (job.state === 'completed') {
           completed++
+        } else if (job.state === 'failed') {
+          completed++
+          failed++
         } else {
           allDone = false
         }
@@ -301,6 +330,12 @@ function App() {
       if (allDone) {
         setIsGenerating(false)
         loadOutputs()
+        const success = jobIds.length - failed
+        if (failed > 0) {
+          toast(`Done: ${success} videos created, ${failed} failed`, failed === jobIds.length ? 'error' : 'success')
+        } else {
+          toast(`${success} videos ready!`, 'success')
+        }
       } else {
         setTimeout(check, 2000)
       }
@@ -521,7 +556,10 @@ function App() {
         <div>
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-sm font-medium text-foreground">Generated Videos</h3>
-            <Button size="sm" variant="ghost" onClick={loadOutputs}>Refresh</Button>
+            <Button size="sm" variant="ghost" onClick={() => loadOutputs(true)} disabled={isRefreshing}>
+              <RefreshCw className={cn("w-4 h-4 mr-1", isRefreshing && "animate-spin")} />
+              Refresh
+            </Button>
           </div>
           
           {outputs.length === 0 ? (
