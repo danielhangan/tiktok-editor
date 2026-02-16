@@ -71,21 +71,22 @@ function wrapText(text: string, options: TextOptions): string {
 }
 
 function escapeFFmpegText(text: string): string {
-  // FFmpeg drawtext filter escaping (for use inside single quotes)
-  // Order matters!
+  // FFmpeg drawtext filter escaping for filter_complex
+  // FFmpeg does TWO levels of parsing: filter syntax, then drawtext parsing
+  // So we need double-escaping for special chars
   let escaped = text;
   
-  // 1. Escape backslashes first (\ -> \\)
-  escaped = escaped.replace(/\\/g, '\\\\');
+  // 1. Escape backslashes first (\ -> \\\\) - double for filter + drawtext parsing
+  escaped = escaped.replace(/\\/g, '\\\\\\\\');
   
-  // 2. Escape single quotes for shell (break out of quotes)
-  escaped = escaped.replace(/'/g, "'\\''");
+  // 2. Escape single quotes 
+  escaped = escaped.replace(/'/g, "\\\\'");
   
-  // 3. Escape colons (FFmpeg filter option separator)
-  escaped = escaped.replace(/:/g, '\\:');
+  // 3. Escape colons (FFmpeg filter option separator) 
+  escaped = escaped.replace(/:/g, '\\\\:');
   
-  // 4. Convert actual newlines to FFmpeg newline escape
-  escaped = escaped.replace(/\n/g, '\\n');
+  // 4. Convert newlines to \\n (double-escaped so FFmpeg interprets as newline)
+  escaped = escaped.replace(/\n/g, '\\\\n');
   
   return escaped;
 }
@@ -147,13 +148,15 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
     hookText, 
     outputPath, 
     reactionDuration, 
-    width, 
-    height,
-    textMaxWidthPercent = 60,
-    textAlign = 'center',
-    fontSize = 38,
-    textPosition = 'center'
+    width = 1080, 
+    height = 1920
   } = data;
+  
+  // Ensure text settings have defaults (in case old jobs don't have them)
+  const textMaxWidthPercent = data.textMaxWidthPercent ?? 60;
+  const textAlign = data.textAlign ?? 'center';
+  const fontSize = data.fontSize ?? 38;
+  const textPosition = data.textPosition ?? 'center';
 
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -170,16 +173,18 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   const textX = getTextXPosition(textAlign, textMaxWidthPercent);
   const textY = getTextYPosition(textPosition, height);
 
-  logger.debug({ 
+  logger.info({ 
     hookText, 
-    wrappedText, 
+    wrappedText: wrappedText.replace(/\n/g, '|NEWLINE|'),
+    escapedText,
+    maxCharsPerLine: Math.floor((width * textMaxWidthPercent / 100) / (fontSize * 0.55)),
     textMaxWidthPercent, 
     textAlign, 
     fontSize, 
     textPosition,
     textX,
     textY
-  }, 'Text settings');
+  }, 'Text rendering settings');
 
   try {
     // Step 1: Process reaction - scale, trim, add text overlay
