@@ -57,6 +57,9 @@ COPY --chown=nodejs:nodejs public ./public
 # Copy React frontend build
 COPY --from=frontend-build --chown=nodejs:nodejs /app/public-react ./public-react
 
+# Copy stock library
+COPY --chown=nodejs:nodejs library ./library
+
 # Add entrypoint script (fixes volume permissions at runtime)
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh

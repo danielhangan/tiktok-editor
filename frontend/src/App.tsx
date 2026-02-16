@@ -11,6 +11,13 @@ interface FileInfo {
   size: number
 }
 
+interface LibraryFile {
+  id: string
+  filename: string
+  size: number
+  url: string
+}
+
 interface Output {
   id: string
   filename: string
@@ -149,6 +156,8 @@ function App() {
   const [reactions, setReactions] = useState<FileInfo[]>([])
   const [demos, setDemos] = useState<FileInfo[]>([])
   const [music, setMusic] = useState<FileInfo[]>([])
+  const [libraryReactions, setLibraryReactions] = useState<LibraryFile[]>([])
+  const [useLibrary, setUseLibrary] = useState(false)
   const [hooks, setHooks] = useState<string[]>([])
   const [hooksText, setHooksText] = useState('')
   const [outputs, setOutputs] = useState<Output[]>([])
@@ -159,15 +168,25 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [isRefreshing, setIsRefreshing] = useState(false)
+  // Single selection mode
+  const [singleMode, setSingleMode] = useState(false)
+  const [selectedReaction, setSelectedReaction] = useState('')
+  const [selectedDemo, setSelectedDemo] = useState('')
 
   // Load initial data
   useEffect(() => {
     loadFiles('reactions').then(setReactions)
     loadFiles('demos').then(setDemos)
     loadFiles('music').then(setMusic)
+    loadLibrary()
     loadHooks()
     loadOutputs()
   }, [])
+
+  const loadLibrary = async () => {
+    const res = await api('/api/library/reactions')
+    setLibraryReactions(await res.json())
+  }
 
   const loadFiles = async (type: string): Promise<FileInfo[]> => {
     const res = await api(`/api/files/${type}`)
@@ -257,30 +276,53 @@ function App() {
   }
 
   const generate = async () => {
-    if (!reactions.length || !demos.length) {
-      toast('Upload reactions and demos first', 'error')
+    const activeReactions = useLibrary ? libraryReactions : reactions
+    const demoList = demos
+    
+    if (!activeReactions.length || !demoList.length) {
+      toast('Upload demos and select reactions first', 'error')
       return
+    }
+    
+    // Single mode validation
+    if (singleMode) {
+      if (!selectedReaction || !selectedDemo) {
+        toast('Select a reaction and demo', 'error')
+        return
+      }
     }
     
     setIsGenerating(true)
     const combinations = []
     
-    for (const reaction of reactions) {
-      for (const demo of demos) {
-        const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
-        // Random music assignment per video
-        let musicId = undefined
-        if (selectedMusic === 'random' && music.length > 0) {
-          musicId = music[Math.floor(Math.random() * music.length)].id
-        } else if (selectedMusic && selectedMusic !== 'random') {
-          musicId = selectedMusic
+    if (singleMode) {
+      // Single video mode
+      const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
+      let musicId = undefined
+      if (selectedMusic === 'random' && music.length > 0) {
+        musicId = music[Math.floor(Math.random() * music.length)].id
+      } else if (selectedMusic && selectedMusic !== 'random') {
+        musicId = selectedMusic
+      }
+      combinations.push({ reactionId: selectedReaction, demoId: selectedDemo, hookIndex, musicId })
+    } else {
+      // All combinations mode
+      for (const reaction of activeReactions) {
+        for (const demo of demoList) {
+          const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
+          let musicId = undefined
+          if (selectedMusic === 'random' && music.length > 0) {
+            musicId = music[Math.floor(Math.random() * music.length)].id
+          } else if (selectedMusic && selectedMusic !== 'random') {
+            musicId = selectedMusic
+          }
+          combinations.push({ reactionId: reaction.id, demoId: demo.id, hookIndex, musicId })
         }
-        combinations.push({ reactionId: reaction.id, demoId: demo.id, hookIndex, musicId })
       }
     }
     
     setProgress({ current: 0, total: combinations.length })
-    toast(`Generating ${combinations.length} videos...`, 'loading')
+    toast(`Generating ${combinations.length} video${combinations.length > 1 ? 's' : ''}...`, 'loading')
     
     try {
       const res = await api('/api/generate', {
@@ -415,7 +457,8 @@ function App() {
     )
   }
 
-  const totalCombinations = reactions.length * demos.length
+  const activeReactions = useLibrary ? libraryReactions : reactions
+  const totalCombinations = activeReactions.length * demos.length
 
   return (
     <div className="min-h-screen bg-background">
@@ -439,8 +482,92 @@ function App() {
       <main className="max-w-6xl mx-auto px-6 py-10">
         {/* Upload Grid */}
         <div className="grid md:grid-cols-3 gap-8 mb-12">
-          <DropZone type="reactions" files={reactions} icon={Upload} accept="video/*" label="Face Reactions" />
-          <DropZone type="demos" files={demos} icon={Play} accept="video/*" label="App Demos" />
+          {/* Reactions - with library toggle */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-foreground">Face Reactions</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setUseLibrary(false)}
+                  className={cn(
+                    "px-2 py-1 text-xs rounded-md transition-colors",
+                    !useLibrary ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  My Uploads
+                </button>
+                <button
+                  onClick={() => setUseLibrary(true)}
+                  className={cn(
+                    "px-2 py-1 text-xs rounded-md transition-colors",
+                    useLibrary ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Stock ({libraryReactions.length})
+                </button>
+              </div>
+            </div>
+            
+            {useLibrary ? (
+              <div className="border-2 border-dashed border-border rounded-xl p-4">
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {libraryReactions.map(f => (
+                    <div 
+                      key={f.id} 
+                      className={cn(
+                        "flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer transition-colors",
+                        singleMode && selectedReaction === f.id 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-muted/50 hover:bg-muted"
+                      )}
+                      onClick={() => singleMode && setSelectedReaction(f.id)}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Upload className="w-4 h-4 shrink-0 opacity-60" />
+                        <span className="text-sm truncate">{f.filename}</span>
+                      </div>
+                      <span className="text-xs opacity-60">{formatBytes(f.size)}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-3 text-center">
+                  {singleMode ? 'Click to select one' : `${libraryReactions.length} stock reactions`}
+                </p>
+              </div>
+            ) : (
+              <>
+                <DropZone type="reactions" files={reactions} icon={Upload} accept="video/*" label="" />
+                {singleMode && reactions.length > 0 && (
+                  <select
+                    value={selectedReaction}
+                    onChange={(e) => setSelectedReaction(e.target.value)}
+                    className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
+                  >
+                    <option value="">Select reaction...</option>
+                    {reactions.map(r => (
+                      <option key={r.id} value={r.id}>{r.originalName}</option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+          </div>
+          {/* Demos */}
+          <div className="space-y-4">
+            <DropZone type="demos" files={demos} icon={Play} accept="video/*" label="App Demos" />
+            {singleMode && demos.length > 0 && (
+              <select
+                value={selectedDemo}
+                onChange={(e) => setSelectedDemo(e.target.value)}
+                className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
+              >
+                <option value="">Select demo...</option>
+                {demos.map(d => (
+                  <option key={d.id} value={d.id}>{d.originalName}</option>
+                ))}
+              </select>
+            )}
+          </div>
           
           {/* Music with TikTok extraction */}
           <div className="space-y-4">
@@ -499,8 +626,29 @@ function App() {
             <div>
               <h2 className="text-lg font-semibold mb-1">Generate Videos</h2>
               <p className="text-sm text-muted-foreground">
-                {totalCombinations} possible combinations • {hooks.length} hooks
+                {singleMode ? '1 video' : `${totalCombinations} combinations`} • {hooks.length} hooks
               </p>
+              {/* Mode toggle */}
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => setSingleMode(false)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
+                    !singleMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  All Combinations
+                </button>
+                <button
+                  onClick={() => setSingleMode(true)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
+                    singleMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Single Video
+                </button>
+              </div>
             </div>
             
             <div className="flex items-center gap-4">

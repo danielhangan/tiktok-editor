@@ -2,6 +2,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import { generateRoute, jobStatusRoute } from './schemas.js';
 import { addJob, getJobStatus, updateJobStatus, queue } from '~/queue/index.js';
 import { getFile, getOutputPath, getHooks, getOutputUrlPath } from '~/utils/storage.js';
+import { getLibraryReactionPath } from '~/components/library/controller.js';
 import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { randomUUID } from 'crypto';
@@ -22,12 +23,21 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
 
     for (let i = 0; i < combinations.length; i++) {
       const combo = combinations[i];
-      const reaction = getFile('reactions', combo.reactionId, sessionId);
+      
+      // Support both user uploads and library reactions
+      let reactionPath: string | null = null;
+      if (combo.reactionId.startsWith('lib_')) {
+        reactionPath = getLibraryReactionPath(combo.reactionId);
+      } else {
+        const reaction = getFile('reactions', combo.reactionId, sessionId);
+        reactionPath = reaction?.path || null;
+      }
+      
       const demo = getFile('demos', combo.demoId, sessionId);
       const hookText = combo.hookIndex >= 0 && hooks[combo.hookIndex] ? hooks[combo.hookIndex] : '';
 
-      if (!reaction || !demo) {
-        logger.warn({ combo, sessionId }, 'Missing files for combination');
+      if (!reactionPath || !demo) {
+        logger.warn({ combo, sessionId, reactionPath, demo: !!demo }, 'Missing files for combination');
         continue;
       }
 
@@ -44,7 +54,7 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       const outputPath = getOutputPath(batchId, i + 1, sessionId);
 
       const jobData = {
-        reactionPath: reaction.path,
+        reactionPath,
         demoPath: demo.path,
         hookText,
         outputPath,

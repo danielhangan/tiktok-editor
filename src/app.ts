@@ -12,6 +12,7 @@ import { registerHooksRoutes } from '~/components/hooks/controller.js';
 import { registerGenerateRoutes } from '~/components/generate/controller.js';
 import { registerOutputRoutes } from '~/components/outputs/controller.js';
 import { registerTikTokRoutes } from '~/components/tiktok/controller.js';
+import { registerLibraryRoutes } from '~/components/library/controller.js';
 
 export function createApp() {
   const app = new OpenAPIHono();
@@ -65,6 +66,7 @@ export function createApp() {
   registerGenerateRoutes(app);
   registerOutputRoutes(app);
   registerTikTokRoutes(app);
+  registerLibraryRoutes(app);
 
   // OpenAPI documentation
   app.doc('/doc', {

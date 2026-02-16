@@ -4,5 +4,9 @@ data/
 *.mp4
 *.mov
 *.MOV
+# Allow library files
+!library/**/*.mp4
+!library/**/*.mov
+!library/**/*.MOV
 .env
 .DS_Store
