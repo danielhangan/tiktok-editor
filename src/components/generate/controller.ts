@@ -1,21 +1,12 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import Redis from 'ioredis';
 import { generateRoute, jobStatusRoute } from './schemas.js';
-import { addJob, getJobStatus } from '~/queue/index.js';
+import { addJob, getJobStatus, updateJobStatus, queue } from '~/queue/index.js';
 import { getFile, getOutputPath } from '~/utils/storage.js';
-import { env } from '~/config/env.js';
+import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { randomUUID } from 'crypto';
-
-const HOOKS_KEY = 'tiktok-editor:hooks';
-
-let redis: Redis | null = null;
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(env.REDIS_URL);
-  }
-  return redis;
-}
+import { generateTikTokVideo } from '~/utils/ffmpeg.js';
+import { getHooks } from '~/components/hooks/controller.js';
 
 export function registerGenerateRoutes(app: OpenAPIHono) {
   app.openapi(generateRoute, async (c) => {
@@ -25,7 +16,7 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       return c.json({ error: 'No combinations specified' }, 400);
     }
 
-    const hooks = await getRedis().lrange(HOOKS_KEY, 0, -1);
+    const hooks = getHooks();
     const batchId = randomUUID();
     const jobIds: string[] = [];
 
@@ -33,7 +24,7 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       const combo = combinations[i];
       const reaction = getFile('reactions', combo.reactionId);
       const demo = getFile('demos', combo.demoId);
-      const hookText = hooks[combo.hookIndex] || '';
+      const hookText = combo.hookIndex >= 0 && hooks[combo.hookIndex] ? hooks[combo.hookIndex] : '';
 
       if (!reaction || !demo) {
         logger.warn({ combo }, 'Missing files for combination');
@@ -42,7 +33,7 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
 
       const outputPath = getOutputPath(batchId, i + 1);
 
-      const jobId = await addJob({
+      const jobData = {
         reactionPath: reaction.path,
         demoPath: demo.path,
         hookText,
@@ -50,9 +41,16 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
         reactionDuration: env.REACTION_DURATION,
         width: env.OUTPUT_WIDTH,
         height: env.OUTPUT_HEIGHT
-      });
+      };
 
+      const jobId = await addJob(jobData);
       jobIds.push(jobId);
+
+      // If no Redis, process synchronously in background
+      if (!hasRedis) {
+        // Fire and forget - process in background
+        processJobSync(jobId, jobData);
+      }
     }
 
     logger.info({ batchId, jobCount: jobIds.length }, 'Generation batch started');
@@ -79,4 +77,39 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       result: status.result
     });
   });
+}
+
+// Synchronous job processing (when Redis is not available)
+async function processJobSync(jobId: string, data: {
+  reactionPath: string;
+  demoPath: string;
+  hookText: string;
+  outputPath: string;
+  reactionDuration: number;
+  width: number;
+  height: number;
+}) {
+  updateJobStatus(jobId, 'active', 10);
+  
+  try {
+    logger.info({ jobId, outputPath: data.outputPath }, 'Processing video (sync mode)');
+    
+    const outputPath = await generateTikTokVideo(data);
+    
+    updateJobStatus(jobId, 'completed', 100, {
+      success: true,
+      outputPath,
+      outputUrl: `/output/${outputPath.split('/').pop()}`
+    });
+    
+    logger.info({ jobId, outputPath }, 'Video generation completed (sync mode)');
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error({ jobId, error: errorMessage }, 'Video generation failed (sync mode)');
+    
+    updateJobStatus(jobId, 'failed', 100, {
+      success: false,
+      error: errorMessage
+    });
+  }
 }

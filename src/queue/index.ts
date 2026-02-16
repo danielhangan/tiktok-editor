@@ -1,9 +1,7 @@
 import { Queue, QueueEvents } from 'bullmq';
 import { z } from 'zod';
-import { env } from '~/config/env.js';
+import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
-
-const connection = { url: env.REDIS_URL };
 
 export const JobType = {
   GENERATE_VIDEO: 'generate:video'
@@ -34,50 +32,80 @@ export type GenerateVideoData = z.infer<typeof GenerateVideoDataSchema>;
 
 export const QUEUE_NAME = 'tiktok-editor-jobs';
 
-export const queue = new Queue<GenerateVideoData, JobResult>(QUEUE_NAME, {
-  connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 1000
-    },
-    removeOnComplete: {
-      age: 3600,
-      count: 100
-    },
-    removeOnFail: {
-      age: 86400,
-      count: 500
-    }
-  }
-});
+// In-memory job tracking for when Redis is not available
+const inMemoryJobs = new Map<string, { state: string; progress: number; result?: JobResult }>();
+let jobCounter = 0;
 
-export const queueEvents = new QueueEvents(QUEUE_NAME, { connection });
+// BullMQ queue (only if Redis is available)
+let queue: Queue<GenerateVideoData, JobResult> | null = null;
+let queueEvents: QueueEvents | null = null;
+
+if (hasRedis) {
+  const connection = { url: env.REDIS_URL! };
+  
+  queue = new Queue<GenerateVideoData, JobResult>(QUEUE_NAME, {
+    connection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 1000
+      },
+      removeOnComplete: {
+        age: 3600,
+        count: 100
+      },
+      removeOnFail: {
+        age: 86400,
+        count: 500
+      }
+    }
+  });
+
+  queueEvents = new QueueEvents(QUEUE_NAME, { connection });
+  logger.info('📦 BullMQ queue initialized with Redis');
+} else {
+  logger.warn('⚠️ Running without Redis - using synchronous processing');
+}
 
 export const addJob = async (data: GenerateVideoData): Promise<string> => {
-  logger.debug({ data }, 'Adding video generation job to queue');
+  logger.debug({ data }, 'Adding video generation job');
 
-  try {
+  if (queue) {
+    // Use BullMQ
     const job = await queue.add(JobType.GENERATE_VIDEO, data);
-    logger.info({ jobId: job.id }, 'Job added to queue');
+    logger.info({ jobId: job.id }, 'Job added to Redis queue');
     return job.id!;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error({ error: errorMessage }, 'Failed to add job');
-    throw error;
+  } else {
+    // In-memory tracking - processing happens synchronously in the API
+    const jobId = `inmem_${++jobCounter}`;
+    inMemoryJobs.set(jobId, { state: 'waiting', progress: 0 });
+    logger.info({ jobId }, 'Job tracked in memory');
+    return jobId;
+  }
+};
+
+export const updateJobStatus = (jobId: string, state: string, progress: number, result?: JobResult) => {
+  if (!queue && inMemoryJobs.has(jobId)) {
+    inMemoryJobs.set(jobId, { state, progress, result });
   }
 };
 
 export const getJobStatus = async (jobId: string) => {
-  const job = await queue.getJob(jobId);
-  if (!job) return null;
+  if (queue) {
+    const job = await queue.getJob(jobId);
+    if (!job) return null;
 
-  const state = await job.getState();
-  const progress = job.progress;
-  const result = job.returnvalue;
+    const state = await job.getState();
+    const progress = job.progress;
+    const result = job.returnvalue;
 
-  return { id: job.id, state, progress, result };
+    return { id: job.id, state, progress, result };
+  } else {
+    const job = inMemoryJobs.get(jobId);
+    if (!job) return null;
+    return { id: jobId, ...job };
+  }
 };
 
 export const validateJobResult = (result: unknown): JobResult => {
@@ -85,6 +113,8 @@ export const validateJobResult = (result: unknown): JobResult => {
     return JobResultSchema.parse(result);
   } catch (error) {
     logger.error({ error, result }, 'Job result validation failed');
-    throw new Error('Invalid job result format from queue');
+    throw new Error('Invalid job result format');
   }
 };
+
+export { queue, queueEvents };

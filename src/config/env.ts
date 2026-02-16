@@ -9,7 +9,8 @@ const schema = z.object({
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  // Redis (optional - will use in-memory if not provided)
+  REDIS_URL: z.string().optional(),
 
   DATA_DIR: z.string().default('./data'),
   TEMP_DIR: z.string().default('/tmp/tiktok-editor'),
@@ -22,7 +23,18 @@ const schema = z.object({
   OUTPUT_WIDTH: z.coerce.number().default(1080),
   OUTPUT_HEIGHT: z.coerce.number().default(1920),
 
+  // S3-compatible storage (optional)
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().default('auto'),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_PUBLIC_URL: z.string().optional(),
+
   AUTH_TOKEN: z.string().optional()
 });
 
 export const env = schema.parse(process.env);
+
+export const hasRedis = !!env.REDIS_URL;
+export const hasS3 = !!(env.S3_ENDPOINT && env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY);

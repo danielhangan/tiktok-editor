@@ -1,16 +1,20 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import Redis from 'ioredis';
 import { getHooksRoute, setHooksRoute } from './schemas.js';
-import { env } from '~/config/env.js';
+import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 
 const HOOKS_KEY = 'tiktok-editor:hooks';
 
-// Lazy connection for hooks storage
+// In-memory storage fallback
+let inMemoryHooks: string[] = [];
+
+// Lazy Redis connection
 let redis: Redis | null = null;
-function getRedis(): Redis {
+function getRedis(): Redis | null {
+  if (!hasRedis) return null;
   if (!redis) {
-    redis = new Redis(env.REDIS_URL);
+    redis = new Redis(env.REDIS_URL!);
   }
   return redis;
 }
@@ -18,11 +22,15 @@ function getRedis(): Redis {
 export function registerHooksRoutes(app: OpenAPIHono) {
   app.openapi(getHooksRoute, async (c) => {
     try {
-      const hooks = await getRedis().lrange(HOOKS_KEY, 0, -1);
-      return c.json(hooks);
+      const r = getRedis();
+      if (r) {
+        const hooks = await r.lrange(HOOKS_KEY, 0, -1);
+        return c.json(hooks);
+      } else {
+        return c.json(inMemoryHooks);
+      }
     } catch {
-      // Fallback if Redis fails
-      return c.json([]);
+      return c.json(inMemoryHooks);
     }
   });
 
@@ -31,15 +39,26 @@ export function registerHooksRoutes(app: OpenAPIHono) {
 
     try {
       const r = getRedis();
-      await r.del(HOOKS_KEY);
-      if (hooks.length > 0) {
-        await r.rpush(HOOKS_KEY, ...hooks);
+      if (r) {
+        await r.del(HOOKS_KEY);
+        if (hooks.length > 0) {
+          await r.rpush(HOOKS_KEY, ...hooks);
+        }
       }
+      // Always update in-memory as fallback
+      inMemoryHooks = hooks;
+      
       logger.info({ count: hooks.length }, 'Hooks saved');
       return c.json({ success: true, count: hooks.length });
     } catch (error) {
-      logger.error({ error }, 'Failed to save hooks');
-      return c.json({ success: false, count: 0 });
+      logger.error({ error }, 'Failed to save hooks to Redis, using memory');
+      inMemoryHooks = hooks;
+      return c.json({ success: true, count: hooks.length });
     }
   });
+}
+
+// Export for use in generate controller
+export function getHooks(): string[] {
+  return inMemoryHooks;
 }

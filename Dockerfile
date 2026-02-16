@@ -49,4 +49,5 @@ ENV DATA_DIR=/app/data
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# Use start:with-worker if REDIS_URL is set, otherwise just server
+CMD ["sh", "-c", "if [ -n \"$REDIS_URL\" ]; then npm run start:with-worker; else npm start; fi"]

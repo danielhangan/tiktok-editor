@@ -9,7 +9,8 @@
     "build": "npm run build:server && npm run build:worker",
     "build:server": "esbuild src/server.ts --bundle --sourcemap --platform=node --format=esm --packages=external --outfile=dist/server.js",
     "build:worker": "esbuild src/worker.ts --bundle --sourcemap --platform=node --format=esm --packages=external --outfile=dist/worker.js",
-    "start": "concurrently --names \"SERVER,WORKER\" --prefix-colors \"blue,green\" \"node ./dist/server.js\" \"node ./dist/worker.js\"",
+    "start": "node ./dist/server.js",
+    "start:with-worker": "concurrently --names \"SERVER,WORKER\" --prefix-colors \"blue,green\" \"node ./dist/server.js\" \"node ./dist/worker.js\"",
     "start:server": "node ./dist/server.js",
     "start:worker": "node ./dist/worker.js",
     "typecheck": "tsc --noEmit"

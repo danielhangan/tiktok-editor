@@ -1,15 +1,21 @@
 import { Worker, Job } from 'bullmq';
-import { env } from '~/config/env.js';
+import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { QUEUE_NAME, JobType, GenerateVideoDataSchema } from '~/queue/index.js';
 import type { GenerateVideoData, JobResult } from '~/queue/index.js';
 import { generateTikTokVideo } from '~/utils/ffmpeg.js';
 import { ensureDirectories } from '~/utils/storage.js';
 
-const connection = { url: env.REDIS_URL };
-
 // Initialize
 ensureDirectories();
+
+if (!hasRedis) {
+  logger.warn('⚠️ No Redis URL configured - worker not needed in sync mode');
+  logger.info('The server will process jobs synchronously without this worker.');
+  process.exit(0);
+}
+
+const connection = { url: env.REDIS_URL! };
 
 async function processJob(job: Job<GenerateVideoData, JobResult>): Promise<JobResult> {
   const data = GenerateVideoDataSchema.parse(job.data);
