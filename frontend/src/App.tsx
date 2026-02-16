@@ -365,33 +365,42 @@ function App() {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Left Column */}
           <div className="space-y-6">
-            {/* Video Text */}
+            {/* Video Text / Hooks */}
             <div className="bg-white border border-border rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold">Add Video Text</h2>
-                <Button size="sm" variant="ghost" onClick={saveHooks}>Save</Button>
+                <div>
+                  <h2 className="font-semibold">Text Hooks</h2>
+                  <p className="text-xs text-muted-foreground">One per line • Random hook per video</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{hooks.length} saved</span>
+                  <Button size="sm" variant="ghost" onClick={saveHooks}>Save</Button>
+                </div>
               </div>
               <textarea
                 value={hooksText}
                 onChange={(e) => setHooksText(e.target.value)}
-                placeholder="Enter the text you want to show in your video..."
-                className="w-full h-24 p-3 bg-muted/30 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder="Wait until you see this...&#10;This app changed my life&#10;POV: You just discovered..."
+                className="w-full h-28 p-3 bg-muted/30 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring font-mono"
               />
-              <div className="flex gap-2 mt-3">
-                {(['top', 'center', 'bottom'] as const).map(pos => (
-                  <button
-                    key={pos}
-                    onClick={() => setTextPosition(pos)}
-                    className={cn(
-                      "flex-1 py-2 text-sm rounded-lg font-medium transition-colors",
-                      textPosition === pos 
-                        ? "bg-primary text-primary-foreground" 
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    {pos.charAt(0).toUpperCase() + pos.slice(1)}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-xs text-muted-foreground">Position:</p>
+                <div className="flex gap-1">
+                  {(['top', 'center', 'bottom'] as const).map(pos => (
+                    <button
+                      key={pos}
+                      onClick={() => setTextPosition(pos)}
+                      className={cn(
+                        "px-3 py-1.5 text-xs rounded-lg font-medium transition-colors",
+                        textPosition === pos 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -675,7 +684,7 @@ function App() {
               <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
                 <p>✓ Template: {selectedTemplateData ? selectedTemplateData.filename : 'None selected'}</p>
                 <p>✓ Demo: {selectedDemo ? demos.find(d => d.id === selectedDemo)?.originalName : `${demos.length} uploaded`}</p>
-                <p>✓ Text: {hooksText ? `"${hooksText.slice(0, 30)}${hooksText.length > 30 ? '...' : ''}"` : 'None'}</p>
+                <p>✓ Hooks: {hooks.length > 0 ? `${hooks.length} saved (random per video)` : 'None'}</p>
                 <p>✓ Music: {selectedMusic ? (selectedMusic === 'random' ? 'Random' : 'Selected') : 'None'}</p>
               </div>
             </div>
