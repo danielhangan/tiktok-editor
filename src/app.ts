@@ -52,7 +52,8 @@ export function createApp() {
     });
   });
 
-  // Static files
+  // Static files - serve React build, fall back to old public
+  app.use('/*', serveStatic({ root: './public-react' }));
   app.use('/*', serveStatic({ root: './public' }));
 
   // Health check
