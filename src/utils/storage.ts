@@ -13,9 +13,14 @@ export interface FileInfo {
   createdAt: Date;
 }
 
-export type FileType = 'reactions' | 'demos';
+export type FileType = 'reactions' | 'demos' | 'music';
 
-const VALID_EXTENSIONS = ['.mp4', '.mov', '.MOV', '.avi', '.webm'];
+const VALID_VIDEO_EXTENSIONS = ['.mp4', '.mov', '.MOV', '.avi', '.webm'];
+const VALID_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.aac', '.ogg'];
+
+function getValidExtensions(type: FileType): string[] {
+  return type === 'music' ? VALID_AUDIO_EXTENSIONS : VALID_VIDEO_EXTENSIONS;
+}
 
 function getSessionDir(sessionId: string): string {
   // Sanitize sessionId to prevent directory traversal
@@ -48,6 +53,7 @@ export function ensureSessionDirectories(sessionId: string): void {
   const dirs = [
     getDir('reactions', sessionId),
     getDir('demos', sessionId),
+    getDir('music', sessionId),
     getOutputDir(sessionId)
   ];
 
@@ -64,9 +70,10 @@ export function listFiles(type: FileType, sessionId: string): FileInfo[] {
   const dir = getDir(type, sessionId);
   if (!fs.existsSync(dir)) return [];
 
+  const validExts = getValidExtensions(type);
   return fs
     .readdirSync(dir)
-    .filter((f) => VALID_EXTENSIONS.some((ext) => f.toLowerCase().endsWith(ext.toLowerCase())))
+    .filter((f) => validExts.some((ext) => f.toLowerCase().endsWith(ext.toLowerCase())))
     .map((filename) => {
       const filePath = path.join(dir, filename);
       const stats = fs.statSync(filePath);

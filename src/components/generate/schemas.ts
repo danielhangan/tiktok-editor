@@ -14,6 +14,11 @@ const TextSettingsSchema = z.object({
   position: z.enum(['top', 'center', 'bottom']).default('center')
 }).optional();
 
+const AudioSettingsSchema = z.object({
+  musicId: z.string().optional(),
+  musicVolume: z.number().min(0).max(1).default(0.3) // 0-1, default 30%
+}).optional();
+
 const JobStatusSchema = z.object({
   id: z.string(),
   state: z.string(),
@@ -36,7 +41,8 @@ export const generateRoute = createRoute({
         'application/json': {
           schema: z.object({
             combinations: z.array(CombinationSchema),
-            textSettings: TextSettingsSchema
+            textSettings: TextSettingsSchema,
+            audioSettings: AudioSettingsSchema
           })
         }
       }

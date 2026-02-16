@@ -19,7 +19,7 @@ export const listFilesRoute = createRoute({
   path: '/api/files/{type}',
   request: {
     params: z.object({
-      type: z.enum(['reactions', 'demos'])
+      type: z.enum(['reactions', 'demos', 'music'])
     })
   },
   responses: {
@@ -40,7 +40,7 @@ export const uploadFilesRoute = createRoute({
   path: '/api/files/{type}',
   request: {
     params: z.object({
-      type: z.enum(['reactions', 'demos'])
+      type: z.enum(['reactions', 'demos', 'music'])
     }),
     body: {
       content: {
@@ -81,7 +81,7 @@ export const deleteFileRoute = createRoute({
   path: '/api/files/{type}/{id}',
   request: {
     params: z.object({
-      type: z.enum(['reactions', 'demos']),
+      type: z.enum(['reactions', 'demos', 'music']),
       id: z.string()
     })
   },

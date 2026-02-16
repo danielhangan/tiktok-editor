@@ -31,7 +31,10 @@ export const GenerateVideoDataSchema = z.object({
   textMaxWidthPercent: z.number().min(20).max(100).default(60),
   textAlign: z.enum(['left', 'center', 'right']).default('center'),
   fontSize: z.number().min(16).max(80).default(38),
-  textPosition: z.enum(['top', 'center', 'bottom']).default('center')
+  textPosition: z.enum(['top', 'center', 'bottom']).default('center'),
+  // Audio options
+  musicPath: z.string().optional(),
+  musicVolume: z.number().min(0).max(1).default(0.3)
 });
 
 export type GenerateVideoData = z.infer<typeof GenerateVideoDataSchema>;

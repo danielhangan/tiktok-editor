@@ -145,6 +145,10 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   const textAlign = data.textAlign ?? 'center';
   const fontSize = data.fontSize ?? 38;
   const textPosition = data.textPosition ?? 'center';
+  
+  // Audio settings
+  const musicPath = data.musicPath;
+  const musicVolume = data.musicVolume ?? 0.3;
 
   const outputDir = path.dirname(outputPath);
   if (!fs.existsSync(outputDir)) {
@@ -179,20 +183,38 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   }, 'Text rendering settings');
 
   try {
-    // Step 1: Process reaction - scale, trim, add text overlay
-    logger.debug({ tmpReaction }, 'Processing reaction');
-    await runFFmpeg([
-      '-y',
-      '-i', reactionPath,
-      '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
-      '-filter_complex',
-      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
-      '-map', '[v]', '-map', '1:a',
-      '-t', String(reactionDuration),
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
-      '-c:a', 'aac', '-b:a', '128k', '-shortest',
-      tmpReaction
-    ]);
+    // Step 1: Process reaction - scale, trim, add text overlay, optionally add music
+    logger.debug({ tmpReaction, musicPath }, 'Processing reaction');
+    
+    if (musicPath && fs.existsSync(musicPath)) {
+      // With music: mix music track with video
+      await runFFmpeg([
+        '-y',
+        '-i', reactionPath,
+        '-i', musicPath,
+        '-filter_complex',
+        `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v];[1:a]volume=${musicVolume},atrim=0:${reactionDuration},asetpts=PTS-STARTPTS[a]`,
+        '-map', '[v]', '-map', '[a]',
+        '-t', String(reactionDuration),
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+        tmpReaction
+      ]);
+    } else {
+      // Without music: use silent audio
+      await runFFmpeg([
+        '-y',
+        '-i', reactionPath,
+        '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+        '-filter_complex',
+        `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
+        '-map', '[v]', '-map', '1:a',
+        '-t', String(reactionDuration),
+        '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+        '-c:a', 'aac', '-b:a', '128k', '-shortest',
+        tmpReaction
+      ]);
+    }
 
     // Step 2: Process demo - scale to match
     logger.debug({ tmpDemo }, 'Processing demo');

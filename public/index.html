@@ -645,6 +645,33 @@ this app changed my life"></textarea>
       </div>
     </div>
 
+    <!-- Music Section -->
+    <div class="grid" style="grid-template-columns: 1fr; margin-bottom: 32px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon">🎵</div>
+            <span>Background Music</span>
+          </div>
+          <span class="card-count" id="music-count">0 tracks</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <div class="dropzone" id="music-dropzone">
+              <input type="file" id="music-input" multiple accept="audio/*">
+              <div class="dropzone-icon">🎶</div>
+              <div class="dropzone-text">
+                Drop music files here<br>
+                or <strong>click to browse</strong><br>
+                <small style="opacity:0.6">MP3, WAV, M4A supported</small>
+              </div>
+            </div>
+          </div>
+          <div class="file-list" id="music-list" style="max-height: 180px;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Generate Section -->
     <div class="generate-section">
       <div class="generate-header">
@@ -724,6 +751,27 @@ this app changed my life"></textarea>
         </div>
       </div>
 
+      <div class="generate-options" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <div class="option-group">
+          <label>🎵 Music:</label>
+          <select id="music-select" style="min-width: 200px;">
+            <option value="">No music</option>
+          </select>
+        </div>
+        <div class="option-group">
+          <label>Volume:</label>
+          <select id="music-volume">
+            <option value="0.1">10%</option>
+            <option value="0.2">20%</option>
+            <option value="0.3" selected>30%</option>
+            <option value="0.4">40%</option>
+            <option value="0.5">50%</option>
+            <option value="0.7">70%</option>
+            <option value="1.0">100%</option>
+          </select>
+        </div>
+      </div>
+
       <div class="generate-actions">
         <button class="btn btn-primary" id="generate-btn" onclick="generateVideos()">
           ✨ Generate Videos
@@ -763,7 +811,7 @@ this app changed my life"></textarea>
 
   <script>
     const API = '';
-    let state = { reactions: [], demos: [], hooks: [] };
+    let state = { reactions: [], demos: [], hooks: [], music: [] };
     
     // Session management - each browser gets a unique session
     function getSessionId() {
@@ -794,10 +842,12 @@ this app changed my life"></textarea>
       await Promise.all([
         loadFiles('reactions'),
         loadFiles('demos'),
+        loadFiles('music'),
         loadHooks(),
         loadOutputs()
       ]);
       updateStats();
+      setupMusicDropzone();
     }
 
     // Show toast
@@ -834,23 +884,70 @@ this app changed my life"></textarea>
       const list = document.getElementById(type + '-list');
       const count = document.getElementById(type + '-count');
       
-      count.textContent = state[type].length + ' files';
+      const countLabel = type === 'music' ? 'tracks' : 'files';
+      count.textContent = state[type].length + ' ' + countLabel;
       
       if (state[type].length === 0) {
         list.innerHTML = '';
+        updateMusicSelector();
         return;
       }
       
+      const icon = type === 'music' ? '🎵' : '🎬';
       list.innerHTML = state[type].map(f => `
         <div class="file-item">
           <div class="file-info">
-            <span class="file-icon">🎬</span>
+            <span class="file-icon">${icon}</span>
             <span class="file-name">${f.originalName}</span>
             <span class="file-size">${formatSize(f.size)}</span>
           </div>
           <button class="file-delete" onclick="deleteFile('${type}', '${f.id}')">✕</button>
         </div>
       `).join('');
+      
+      if (type === 'music') {
+        updateMusicSelector();
+      }
+    }
+    
+    // Update music selector dropdown
+    function updateMusicSelector() {
+      const selector = document.getElementById('music-select');
+      if (!selector) return;
+      
+      const currentValue = selector.value;
+      selector.innerHTML = '<option value="">No music</option>' + 
+        state.music.map(m => `<option value="${m.id}">${m.originalName}</option>`).join('');
+      
+      // Restore selection if still valid
+      if (currentValue && state.music.some(m => m.id === currentValue)) {
+        selector.value = currentValue;
+      }
+    }
+    
+    // Setup music dropzone
+    function setupMusicDropzone() {
+      const dropzone = document.getElementById('music-dropzone');
+      const input = document.getElementById('music-input');
+      
+      if (!dropzone || !input) return;
+      
+      dropzone.onclick = () => input.click();
+      
+      dropzone.ondragover = (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      };
+      
+      dropzone.ondragleave = () => dropzone.classList.remove('dragover');
+      
+      dropzone.ondrop = (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        uploadFiles('music', e.dataTransfer.files);
+      };
+      
+      input.onchange = () => uploadFiles('music', input.files);
     }
 
     // Delete file
@@ -975,6 +1072,13 @@ this app changed my life"></textarea>
         position: document.getElementById('text-position').value
       };
       
+      // Get audio settings
+      const musicId = document.getElementById('music-select').value;
+      const audioSettings = musicId ? {
+        musicId,
+        musicVolume: parseFloat(document.getElementById('music-volume').value)
+      } : undefined;
+      
       // Build all combinations
       let combinations = [];
       for (const reaction of state.reactions) {
@@ -1002,7 +1106,7 @@ this app changed my life"></textarea>
         const res = await fetchWithSession(API + '/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ combinations, textSettings })
+          body: JSON.stringify({ combinations, textSettings, audioSettings })
         });
         
         const data = await res.json();
