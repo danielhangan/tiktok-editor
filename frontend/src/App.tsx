@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Upload, Music, Type, Sparkles, Play, Pause, Trash2, Link, Loader2, Download, Volume2, VolumeX, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Upload, Music, Play, Pause, Trash2, Link, Loader2, Download, Volume2, VolumeX, RefreshCw, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn, formatBytes, api } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
@@ -25,7 +25,7 @@ interface Output {
   size: number
 }
 
-// Clean video player component
+// Video player for outputs
 function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -83,7 +83,6 @@ function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) 
         onPause={() => setIsPlaying(false)}
       />
       
-      {/* Play/Pause overlay */}
       <div 
         className={cn(
           "absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity cursor-pointer",
@@ -92,25 +91,13 @@ function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) 
         onClick={togglePlay}
       >
         <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-          {isPlaying ? (
-            <Pause className="w-6 h-6 text-black" />
-          ) : (
-            <Play className="w-6 h-6 text-black ml-1" />
-          )}
+          {isPlaying ? <Pause className="w-6 h-6 text-black" /> : <Play className="w-6 h-6 text-black ml-1" />}
         </div>
       </div>
 
-      {/* Bottom controls */}
       <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
-        {/* Progress bar */}
-        <div 
-          className="h-1 bg-white/30 rounded-full mb-3 cursor-pointer"
-          onClick={handleSeek}
-        >
-          <div 
-            className="h-full bg-white rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="h-1 bg-white/30 rounded-full mb-3 cursor-pointer" onClick={handleSeek}>
+          <div className="h-full bg-white rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
         
         <div className="flex items-center justify-between">
@@ -120,28 +107,13 @@ function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) 
           </div>
           
           <div className="flex items-center gap-1">
-            <button
-              onClick={toggleMute}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
-            >
-              {isMuted ? (
-                <VolumeX className="w-4 h-4 text-white" />
-              ) : (
-                <Volume2 className="w-4 h-4 text-white" />
-              )}
+            <button onClick={toggleMute} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+              {isMuted ? <VolumeX className="w-4 h-4 text-white" /> : <Volume2 className="w-4 h-4 text-white" />}
             </button>
-            <a
-              href={video.url}
-              download
-              onClick={(e) => e.stopPropagation()}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors"
-            >
+            <a href={video.url} download onClick={(e) => e.stopPropagation()} className="p-2 hover:bg-white/20 rounded-full transition-colors">
               <Download className="w-4 h-4 text-white" />
             </a>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(video.id) }}
-              className="p-2 hover:bg-red-500/50 rounded-full transition-colors"
-            >
+            <button onClick={(e) => { e.stopPropagation(); onDelete(video.id) }} className="p-2 hover:bg-red-500/50 rounded-full transition-colors">
               <Trash2 className="w-4 h-4 text-white" />
             </button>
           </div>
@@ -153,14 +125,19 @@ function VideoCard({ video, onDelete }: { video: Output; onDelete: (id: string) 
 
 function App() {
   const { toast, update } = useToast()
-  const [reactions, setReactions] = useState<FileInfo[]>([])
+  
+  // Data
+  const [libraryReactions, setLibraryReactions] = useState<LibraryFile[]>([])
+  const [uploadedReactions, setUploadedReactions] = useState<FileInfo[]>([])
   const [demos, setDemos] = useState<FileInfo[]>([])
   const [music, setMusic] = useState<FileInfo[]>([])
-  const [libraryReactions, setLibraryReactions] = useState<LibraryFile[]>([])
-  const [useLibrary, setUseLibrary] = useState(false)
   const [hooks, setHooks] = useState<string[]>([])
-  const [hooksText, setHooksText] = useState('')
   const [outputs, setOutputs] = useState<Output[]>([])
+  
+  // UI state
+  const [hooksText, setHooksText] = useState('')
+  const [textPosition, setTextPosition] = useState<'top' | 'center' | 'bottom'>('center')
+  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
   const [selectedMusic, setSelectedMusic] = useState('')
   const [musicVolume, setMusicVolume] = useState('0.3')
   const [tiktokUrl, setTiktokUrl] = useState('')
@@ -168,17 +145,21 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [isRefreshing, setIsRefreshing] = useState(false)
-  // Single selection mode
-  const [singleMode, setSingleMode] = useState(false)
-  const [selectedReaction, setSelectedReaction] = useState('')
-  const [selectedDemo, setSelectedDemo] = useState('')
 
-  // Load initial data
+  // All available templates (library + uploads)
+  const allTemplates = [
+    ...libraryReactions.map(l => ({ ...l, type: 'library' as const })),
+    ...uploadedReactions.map(u => ({ id: u.id, filename: u.originalName, size: u.size, url: `/api/files/reactions/${u.id}/preview`, type: 'upload' as const }))
+  ]
+  
+  const selectedTemplateData = allTemplates.find(t => t.id === selectedTemplate)
+
+  // Load data
   useEffect(() => {
-    loadFiles('reactions').then(setReactions)
+    loadLibrary()
+    loadFiles('reactions').then(setUploadedReactions)
     loadFiles('demos').then(setDemos)
     loadFiles('music').then(setMusic)
-    loadLibrary()
     loadHooks()
     loadOutputs()
   }, [])
@@ -210,28 +191,31 @@ function App() {
     }
   }
 
-  const deleteOutput = async (id: string) => {
-    await api(`/api/outputs/${id}`, { method: 'DELETE' })
-    setOutputs(outputs.filter(o => o.id !== id))
-    toast('Video deleted')
-  }
-
   const uploadFiles = async (type: string, files: FileList) => {
     const formData = new FormData()
     Array.from(files).forEach(f => formData.append('files', f))
     
     await api(`/api/files/${type}`, { method: 'POST', body: formData })
     
-    if (type === 'reactions') setReactions(await loadFiles('reactions'))
+    if (type === 'reactions') setUploadedReactions(await loadFiles('reactions'))
     else if (type === 'demos') setDemos(await loadFiles('demos'))
     else if (type === 'music') setMusic(await loadFiles('music'))
+    
+    toast(`${files.length} file${files.length > 1 ? 's' : ''} uploaded`)
   }
 
   const deleteFile = async (type: string, id: string) => {
     await api(`/api/files/${type}/${id}`, { method: 'DELETE' })
-    if (type === 'reactions') setReactions(await loadFiles('reactions'))
+    if (type === 'reactions') setUploadedReactions(await loadFiles('reactions'))
     else if (type === 'demos') setDemos(await loadFiles('demos'))
     else if (type === 'music') setMusic(await loadFiles('music'))
+    toast('File deleted')
+  }
+
+  const deleteOutput = async (id: string) => {
+    await api(`/api/outputs/${id}`, { method: 'DELETE' })
+    setOutputs(outputs.filter(o => o.id !== id))
+    toast('Video deleted')
   }
 
   const saveHooks = async () => {
@@ -276,27 +260,16 @@ function App() {
   }
 
   const generate = async () => {
-    const activeReactions = useLibrary ? libraryReactions : reactions
-    const demoList = demos
-    
-    if (!activeReactions.length || !demoList.length) {
-      toast('Upload demos and select reactions first', 'error')
+    if (!selectedTemplate || !demos.length) {
+      toast('Select a template and upload demos', 'error')
       return
-    }
-    
-    // Single mode validation
-    if (singleMode) {
-      if (!selectedReaction || !selectedDemo) {
-        toast('Select a reaction and demo', 'error')
-        return
-      }
     }
     
     setIsGenerating(true)
     const combinations = []
     
-    if (singleMode) {
-      // Single video mode
+    // Create one video per demo with the selected template
+    for (const demo of demos) {
       const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
       let musicId = undefined
       if (selectedMusic === 'random' && music.length > 0) {
@@ -304,21 +277,7 @@ function App() {
       } else if (selectedMusic && selectedMusic !== 'random') {
         musicId = selectedMusic
       }
-      combinations.push({ reactionId: selectedReaction, demoId: selectedDemo, hookIndex, musicId })
-    } else {
-      // All combinations mode
-      for (const reaction of activeReactions) {
-        for (const demo of demoList) {
-          const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
-          let musicId = undefined
-          if (selectedMusic === 'random' && music.length > 0) {
-            musicId = music[Math.floor(Math.random() * music.length)].id
-          } else if (selectedMusic && selectedMusic !== 'random') {
-            musicId = selectedMusic
-          }
-          combinations.push({ reactionId: reaction.id, demoId: demo.id, hookIndex, musicId })
-        }
-      }
+      combinations.push({ reactionId: selectedTemplate, demoId: demo.id, hookIndex, musicId })
     }
     
     setProgress({ current: 0, total: combinations.length })
@@ -330,14 +289,13 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           combinations,
-          textSettings: { maxWidthPercent: 60, fontSize: 38, align: 'center', position: 'center' },
+          textSettings: { maxWidthPercent: 60, fontSize: 38, align: 'center', position: textPosition },
           audioSettings: { musicVolume: parseFloat(musicVolume) }
         })
       })
       
       const data = await res.json()
       if (data.success) {
-        // Poll for completion
         pollJobs(data.jobIds)
       }
     } catch {
@@ -347,24 +305,17 @@ function App() {
   }
 
   const pollJobs = async (jobIds: string[]) => {
-    let completed = 0
-    
     const check = async () => {
-      completed = 0
-      let allDone = true
+      let completed = 0
       let failed = 0
+      let allDone = true
       
       for (const id of jobIds) {
         const res = await api(`/api/jobs/${id}`)
         const job = await res.json()
-        if (job.state === 'completed') {
-          completed++
-        } else if (job.state === 'failed') {
-          completed++
-          failed++
-        } else {
-          allDone = false
-        }
+        if (job.state === 'completed') completed++
+        else if (job.state === 'failed') { completed++; failed++ }
+        else allDone = false
       }
       
       setProgress({ current: completed, total: jobIds.length })
@@ -373,391 +324,301 @@ function App() {
         setIsGenerating(false)
         loadOutputs()
         const success = jobIds.length - failed
-        if (failed > 0) {
-          toast(`Done: ${success} videos created, ${failed} failed`, failed === jobIds.length ? 'error' : 'success')
-        } else {
-          toast(`${success} videos ready!`, 'success')
-        }
+        toast(failed > 0 ? `Done: ${success} created, ${failed} failed` : `${success} videos ready!`, failed === jobIds.length ? 'error' : 'success')
       } else {
         setTimeout(check, 2000)
       }
     }
-    
     setTimeout(check, 1000)
   }
 
-  const DropZone = ({ type, files, icon: Icon, accept, label }: {
-    type: string
-    files: FileInfo[]
-    icon: typeof Upload
-    accept: string
-    label: string
-  }) => {
-    const [isDragging, setIsDragging] = useState(false)
-    
-    const handleDrop = useCallback((e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragging(false)
-      if (e.dataTransfer.files.length) {
-        uploadFiles(type, e.dataTransfer.files)
-      }
-    }, [type])
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-foreground">{label}</h3>
-          <span className="text-xs text-muted-foreground">{files.length} files</span>
-        </div>
-        
-        <div
-          className={cn(
-            "relative border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer",
-            isDragging ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
-          )}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById(`input-${type}`)?.click()}
-        >
-          <input
-            id={`input-${type}`}
-            type="file"
-            multiple
-            accept={accept}
-            className="hidden"
-            onChange={(e) => e.target.files && uploadFiles(type, e.target.files)}
-          />
-          <Icon className="w-8 h-8 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Drop files or <span className="text-foreground font-medium">browse</span>
-          </p>
-        </div>
-        
-        {files.length > 0 && (
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {files.map(f => (
-              <div key={f.id} className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg group">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm truncate">{f.originalName}</span>
-                  <span className="text-xs text-muted-foreground">{formatBytes(f.size)}</span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteFile(type, f.id) }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background rounded transition-all"
-                >
-                  <Trash2 className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const activeReactions = useLibrary ? libraryReactions : reactions
-  const totalCombinations = activeReactions.length * demos.length
+  const canGenerate = selectedTemplate && demos.length > 0
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-              <img src="/favicon.svg" alt="ClawdClipper" className="w-9 h-9" />
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">ClawdClipper</h1>
-                <p className="text-sm text-muted-foreground">Create viral UGC videos at scale</p>
-              </div>
-            </div>
-            </div>
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center gap-3">
+            <img src="/favicon.svg" alt="ClawdClipper" className="w-8 h-8" />
+            <h1 className="text-xl font-semibold tracking-tight">ClawdClipper</h1>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 py-10">
-        {/* Upload Grid */}
-        <div className="grid md:grid-cols-3 gap-8 mb-12">
-          {/* Reactions - with library toggle */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-foreground">Face Reactions</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setUseLibrary(false)}
-                  className={cn(
-                    "px-2 py-1 text-xs rounded-md transition-colors",
-                    !useLibrary ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  My Uploads
-                </button>
-                <button
-                  onClick={() => setUseLibrary(true)}
-                  className={cn(
-                    "px-2 py-1 text-xs rounded-md transition-colors",
-                    useLibrary ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  DansUGC Brolls ({libraryReactions.length})
-                </button>
+      <main className="max-w-6xl mx-auto px-6 py-8">
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Left Column */}
+          <div className="space-y-6">
+            {/* Video Text */}
+            <div className="bg-white border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Add Video Text</h2>
+                <Button size="sm" variant="ghost" onClick={saveHooks}>Save</Button>
+              </div>
+              <textarea
+                value={hooksText}
+                onChange={(e) => setHooksText(e.target.value)}
+                placeholder="Enter the text you want to show in your video..."
+                className="w-full h-24 p-3 bg-muted/30 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex gap-2 mt-3">
+                {(['top', 'center', 'bottom'] as const).map(pos => (
+                  <button
+                    key={pos}
+                    onClick={() => setTextPosition(pos)}
+                    className={cn(
+                      "flex-1 py-2 text-sm rounded-lg font-medium transition-colors",
+                      textPosition === pos 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {pos.charAt(0).toUpperCase() + pos.slice(1)}
+                  </button>
+                ))}
               </div>
             </div>
-            
-            {useLibrary ? (
-              <div className="border-2 border-border rounded-xl p-3 bg-muted/20">
-                <p className="text-xs text-muted-foreground mb-2">
-                  {singleMode ? 'Click to select one:' : `All ${libraryReactions.length} Brolls will be used:`}
-                </p>
-                <div className="grid grid-cols-3 gap-2 max-h-52 overflow-y-auto">
-                  {libraryReactions.map(f => (
-                    <div 
-                      key={f.id}
-                      onClick={() => singleMode && setSelectedReaction(f.id)}
-                      className={cn(
-                        "relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer transition-all",
-                        singleMode && selectedReaction === f.id 
-                          ? "ring-2 ring-primary ring-offset-2" 
-                          : singleMode ? "hover:ring-2 hover:ring-muted-foreground" : "opacity-90"
-                      )}
-                    >
-                      <video
-                        src={f.url}
-                        className="w-full h-full object-cover"
-                        muted
-                        playsInline
-                        preload="metadata"
-                        onMouseEnter={(e) => e.currentTarget.play()}
-                        onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
-                      />
-                      {singleMode && selectedReaction === f.id && (
-                        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                          <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                            <span className="text-white text-xs">✓</span>
-                          </div>
+
+            {/* UGC Templates */}
+            <div className="bg-white border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Select UGC Template</h2>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    multiple
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files && uploadFiles('reactions', e.target.files)}
+                  />
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <Plus className="w-4 h-4" /> Upload more
+                  </span>
+                </label>
+              </div>
+              
+              <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto">
+                {allTemplates.map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => setSelectedTemplate(t.id)}
+                    className={cn(
+                      "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all",
+                      selectedTemplate === t.id 
+                        ? "ring-2 ring-primary ring-offset-2" 
+                        : "hover:ring-2 hover:ring-muted-foreground/50"
+                    )}
+                  >
+                    <video
+                      src={t.url}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onMouseEnter={(e) => e.currentTarget.play()}
+                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                    />
+                    {selectedTemplate === t.id && (
+                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
+                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+                          <span className="text-white text-xs">✓</span>
                         </div>
-                      )}
-                      <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/70 to-transparent">
-                        <p className="text-[10px] text-white truncate">{f.filename.replace(/\.(mov|mp4)$/i, '')}</p>
                       </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                {libraryReactions.length} DansUGC Brolls{uploadedReactions.length > 0 && ` + ${uploadedReactions.length} uploads`}
+              </p>
+            </div>
+
+            {/* Call to Action */}
+            <div className="bg-white border border-border rounded-2xl p-5">
+              <h2 className="font-semibold mb-4">Call to Action (Demo Videos)</h2>
+              
+              <div
+                className="border-2 border-dashed border-border rounded-xl p-6 text-center cursor-pointer hover:border-muted-foreground/50 transition-colors"
+                onClick={() => document.getElementById('demo-upload')?.click()}
+              >
+                <input
+                  id="demo-upload"
+                  type="file"
+                  multiple
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files && uploadFiles('demos', e.target.files)}
+                />
+                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Click to upload demo videos</p>
+                <p className="text-xs text-muted-foreground mt-1">App demos, screen recordings, etc.</p>
+              </div>
+              
+              {demos.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {demos.map(d => (
+                    <div key={d.id} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg group">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Play className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm truncate">{d.originalName}</span>
+                      </div>
+                      <button
+                        onClick={() => deleteFile('demos', d.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background rounded transition-all"
+                      >
+                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                      </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <>
-                <DropZone type="reactions" files={reactions} icon={Upload} accept="video/*" label="" />
-                {singleMode && reactions.length > 0 && (
-                  <select
-                    value={selectedReaction}
-                    onChange={(e) => setSelectedReaction(e.target.value)}
-                    className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
-                  >
-                    <option value="">Select reaction...</option>
-                    {reactions.map(r => (
-                      <option key={r.id} value={r.id}>{r.originalName}</option>
-                    ))}
-                  </select>
-                )}
-                {!singleMode && reactions.length > 0 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    All {reactions.length} uploads will be used
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-          {/* Demos */}
-          <div className="space-y-4">
-            <DropZone type="demos" files={demos} icon={Play} accept="video/*" label="App Demos" />
-            {singleMode && demos.length > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground">Select one demo:</p>
-                <select
-                  value={selectedDemo}
-                  onChange={(e) => setSelectedDemo(e.target.value)}
-                  className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
-                >
-                  <option value="">Choose a demo...</option>
-                  {demos.map(d => (
-                    <option key={d.id} value={d.id}>{d.originalName}</option>
-                  ))}
-                </select>
-              </>
-            )}
-            {!singleMode && demos.length > 0 && (
-              <p className="text-xs text-muted-foreground text-center">
-                All {demos.length} demos will be used
-              </p>
-            )}
-          </div>
-          
-          {/* Music with TikTok extraction */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-foreground">Music</h3>
-              <span className="text-xs text-muted-foreground">{music.length} tracks</span>
+              )}
             </div>
-            
-            {/* TikTok URL Input */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={tiktokUrl}
-                  onChange={(e) => setTiktokUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && extractTikTok()}
-                  placeholder="Paste TikTok URL..."
-                  className="w-full h-10 pl-10 pr-4 bg-muted/50 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* Preview */}
+            <div className="bg-muted/30 border border-border rounded-2xl p-5 aspect-[9/14] flex items-center justify-center">
+              {selectedTemplateData ? (
+                <video
+                  src={selectedTemplateData.url}
+                  className="max-h-full max-w-full rounded-xl"
+                  controls
+                  muted
+                  playsInline
                 />
+              ) : (
+                <p className="text-muted-foreground">Select a template to preview</p>
+              )}
+            </div>
+
+            {/* Music */}
+            <div className="bg-white border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Upload Music</h2>
               </div>
-              <Button 
-                size="sm" 
-                onClick={extractTikTok} 
-                disabled={isExtracting}
-                className="shrink-0"
+              
+              {/* TikTok extraction */}
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={tiktokUrl}
+                    onChange={(e) => setTiktokUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && extractTikTok()}
+                    placeholder="Paste TikTok URL to extract audio..."
+                    className="w-full h-10 pl-10 pr-4 bg-muted/30 border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                </div>
+                <Button size="sm" onClick={extractTikTok} disabled={isExtracting}>
+                  {isExtracting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Extract'}
+                </Button>
+              </div>
+              
+              <div
+                className="border-2 border-dashed border-primary/50 rounded-xl p-6 text-center cursor-pointer hover:border-primary transition-colors bg-primary/5"
+                onClick={() => document.getElementById('music-upload')?.click()}
               >
-                {isExtracting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Extract'}
-              </Button>
-            </div>
-            
-            <DropZone type="music" files={music} icon={Music} accept="audio/*" label="" />
-          </div>
-        </div>
-
-        {/* Hooks */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-              <Type className="w-4 h-4" />
-              Text Hooks
-            </h3>
-            <Button size="sm" variant="ghost" onClick={saveHooks}>Save</Button>
-          </div>
-          <textarea
-            value={hooksText}
-            onChange={(e) => setHooksText(e.target.value)}
-            placeholder="Enter text hooks, one per line..."
-            className="w-full h-32 p-4 bg-muted/30 border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-
-        {/* Generate Section */}
-        <div className="bg-muted/30 border border-border rounded-2xl p-8 mb-12">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div>
-              <h2 className="text-lg font-semibold mb-1">Generate Videos</h2>
-              <p className="text-sm text-muted-foreground">
-                {singleMode 
-                  ? '1 video (selected pair)' 
-                  : `${totalCombinations} videos (${activeReactions.length} reactions × ${demos.length} demos)`
-                } • {hooks.length} hooks
-              </p>
-              {/* Mode toggle */}
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  onClick={() => setSingleMode(false)}
-                  className={cn(
-                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
-                    !singleMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  All Combinations
-                </button>
-                <button
-                  onClick={() => setSingleMode(true)}
-                  className={cn(
-                    "px-3 py-1.5 text-xs rounded-lg transition-colors",
-                    singleMode ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Single Video
-                </button>
+                <input
+                  id="music-upload"
+                  type="file"
+                  multiple
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files && uploadFiles('music', e.target.files)}
+                />
+                <Music className="w-8 h-8 mx-auto mb-2 text-primary/60" />
+                <p className="text-sm text-muted-foreground">Click or drag to upload music</p>
+                <p className="text-xs text-muted-foreground mt-1">MP3, WAV files accepted</p>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Music Selection */}
+              
               {music.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="mt-4">
                   <select
                     value={selectedMusic}
                     onChange={(e) => setSelectedMusic(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full h-10 px-3 bg-muted/30 border border-border rounded-lg text-sm"
                   >
                     <option value="">No music</option>
-                    <option value="random">🎲 Random</option>
+                    <option value="random">🎲 Random track</option>
                     {music.map(m => (
                       <option key={m.id} value={m.id}>{m.originalName}</option>
                     ))}
                   </select>
                   {selectedMusic && (
-                    <select
-                      value={musicVolume}
-                      onChange={(e) => setMusicVolume(e.target.value)}
-                      className="h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="0.2">20%</option>
-                      <option value="0.3">30%</option>
-                      <option value="0.5">50%</option>
-                      <option value="0.7">70%</option>
-                      <option value="1">100%</option>
-                    </select>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-muted-foreground">Volume:</span>
+                      <select
+                        value={musicVolume}
+                        onChange={(e) => setMusicVolume(e.target.value)}
+                        className="h-8 px-2 bg-muted/30 border border-border rounded-lg text-xs"
+                      >
+                        <option value="0.2">20%</option>
+                        <option value="0.3">30%</option>
+                        <option value="0.5">50%</option>
+                        <option value="0.7">70%</option>
+                        <option value="1">100%</option>
+                      </select>
+                    </div>
                   )}
                 </div>
               )}
-              
-              <Button 
-                variant="accent" 
-                size="lg"
-                onClick={generate}
-                disabled={isGenerating || !activeReactions.length || !demos.length}
-                className="min-w-[140px]"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {progress.current}/{progress.total}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Generate
-                  </>
-                )}
-              </Button>
             </div>
           </div>
         </div>
 
-        {/* Outputs */}
-        <div>
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-medium text-foreground">Generated Videos</h3>
-            <Button size="sm" variant="ghost" onClick={() => loadOutputs(true)} disabled={isRefreshing}>
-              <RefreshCw className={cn("w-4 h-4 mr-1", isRefreshing && "animate-spin")} />
-              Refresh
+        {/* Generate Button */}
+        <div className="mt-8 bg-muted/30 border border-border rounded-2xl p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {canGenerate 
+                  ? `Ready to create ${demos.length} video${demos.length > 1 ? 's' : ''}`
+                  : 'Select a template and upload demos to get started'
+                }
+              </p>
+            </div>
+            <Button 
+              size="lg"
+              onClick={generate}
+              disabled={isGenerating || !canGenerate}
+              className="min-w-[160px]"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {progress.current}/{progress.total}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate
+                </>
+              )}
             </Button>
           </div>
-          
-          {outputs.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Sparkles className="w-10 h-10 mx-auto mb-4 opacity-30" />
-              <p>No videos yet. Upload files and generate!</p>
+        </div>
+
+        {/* Outputs */}
+        {outputs.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-semibold">Generated Videos</h2>
+              <Button size="sm" variant="ghost" onClick={() => loadOutputs(true)} disabled={isRefreshing}>
+                <RefreshCw className={cn("w-4 h-4 mr-1", isRefreshing && "animate-spin")} />
+                Refresh
+              </Button>
             </div>
-          ) : (
+            
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {outputs.map(o => (
                 <VideoCard key={o.id} video={o} onDelete={deleteOutput} />
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   )
