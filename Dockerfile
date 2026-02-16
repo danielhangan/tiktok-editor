@@ -12,13 +12,13 @@ RUN apk add --no-cache fontconfig ttf-dejavu su-exec
 
 WORKDIR /app
 
-# Dependencies stage
+# Dependencies stage (backend)
 FROM base AS deps
 
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Build stage
+# Build stage (backend)
 FROM base AS build
 
 COPY package*.json ./
@@ -26,6 +26,18 @@ RUN npm ci
 
 COPY . .
 RUN npm run build
+
+# Build stage (frontend)
+FROM node:22-alpine AS frontend-build
+
+WORKDIR /app
+
+COPY frontend/package*.json ./frontend/
+RUN cd frontend && npm ci
+
+COPY frontend/ ./frontend/
+RUN cd frontend && npm run build
+# Output is in /app/public-react
 
 # Runtime stage
 FROM base AS runtime
@@ -41,6 +53,9 @@ COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=build --chown=nodejs:nodejs /app/dist ./dist
 COPY --chown=nodejs:nodejs package*.json ./
 COPY --chown=nodejs:nodejs public ./public
+
+# Copy React frontend build
+COPY --from=frontend-build --chown=nodejs:nodejs /app/public-react ./public-react
 
 # Add entrypoint script (fixes volume permissions at runtime)
 COPY docker-entrypoint.sh /usr/local/bin/
