@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Upload, Music, Type, Sparkles, Play, Trash2, Link, Loader2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Upload, Music, Type, Sparkles, Play, Pause, Trash2, Link, Loader2, Download, Volume2, VolumeX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn, formatBytes, api } from '@/lib/utils'
 
@@ -15,6 +15,126 @@ interface Output {
   filename: string
   url: string
   size: number
+}
+
+// Clean video player component
+function VideoCard({ video }: { video: Output }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(true)
+  const [progress, setProgress] = useState(0)
+
+  const togglePlay = () => {
+    if (!videoRef.current) return
+    if (isPlaying) {
+      videoRef.current.pause()
+    } else {
+      videoRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!videoRef.current) return
+    videoRef.current.muted = !isMuted
+    setIsMuted(!isMuted)
+  }
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current) return
+    const pct = (videoRef.current.currentTime / videoRef.current.duration) * 100
+    setProgress(pct)
+  }
+
+  const handleEnded = () => {
+    setIsPlaying(false)
+    setProgress(0)
+  }
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const pct = (e.clientX - rect.left) / rect.width
+    videoRef.current.currentTime = pct * videoRef.current.duration
+  }
+
+  return (
+    <div className="group relative aspect-[9/16] bg-black rounded-xl overflow-hidden">
+      <video
+        ref={videoRef}
+        src={video.url}
+        className="w-full h-full object-cover cursor-pointer"
+        muted={isMuted}
+        playsInline
+        preload="metadata"
+        onClick={togglePlay}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={handleEnded}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+      />
+      
+      {/* Play/Pause overlay */}
+      <div 
+        className={cn(
+          "absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity cursor-pointer",
+          isPlaying ? "opacity-0 hover:opacity-100" : "opacity-100"
+        )}
+        onClick={togglePlay}
+      >
+        <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+          {isPlaying ? (
+            <Pause className="w-6 h-6 text-black" />
+          ) : (
+            <Play className="w-6 h-6 text-black ml-1" />
+          )}
+        </div>
+      </div>
+
+      {/* Bottom controls */}
+      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent">
+        {/* Progress bar */}
+        <div 
+          className="h-1 bg-white/30 rounded-full mb-3 cursor-pointer"
+          onClick={handleSeek}
+        >
+          <div 
+            className="h-full bg-white rounded-full transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0 mr-3">
+            <p className="text-xs text-white truncate font-medium">{video.filename}</p>
+            <p className="text-xs text-white/60">{formatBytes(video.size)}</p>
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleMute}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            >
+              {isMuted ? (
+                <VolumeX className="w-4 h-4 text-white" />
+              ) : (
+                <Volume2 className="w-4 h-4 text-white" />
+              )}
+            </button>
+            <a
+              href={video.url}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            >
+              <Download className="w-4 h-4 text-white" />
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function App() {
@@ -401,18 +521,7 @@ function App() {
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {outputs.map(o => (
-                <div key={o.id} className="group relative aspect-[9/16] bg-black rounded-xl overflow-hidden">
-                  <video 
-                    src={o.url} 
-                    className="w-full h-full object-cover"
-                    controls
-                    preload="metadata"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-xs text-white truncate">{o.filename}</p>
-                    <p className="text-xs text-white/60">{formatBytes(o.size)}</p>
-                  </div>
-                </div>
+                <VideoCard key={o.id} video={o} />
               ))}
             </div>
           )}
