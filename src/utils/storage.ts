@@ -17,31 +17,51 @@ export type FileType = 'reactions' | 'demos';
 
 const VALID_EXTENSIONS = ['.mp4', '.mov', '.MOV', '.avi', '.webm'];
 
-function getDir(type: FileType): string {
-  return path.join(env.DATA_DIR, 'uploads', type);
+function getSessionDir(sessionId: string): string {
+  // Sanitize sessionId to prevent directory traversal
+  const safeSessionId = sessionId.replace(/[^a-zA-Z0-9-]/g, '');
+  return path.join(env.DATA_DIR, 'sessions', safeSessionId);
 }
 
-function getOutputDir(): string {
-  return path.join(env.DATA_DIR, 'output');
+function getDir(type: FileType, sessionId: string): string {
+  return path.join(getSessionDir(sessionId), 'uploads', type);
+}
+
+function getOutputDir(sessionId: string): string {
+  return path.join(getSessionDir(sessionId), 'output');
+}
+
+function getHooksPath(sessionId: string): string {
+  return path.join(getSessionDir(sessionId), 'hooks.json');
 }
 
 export function ensureDirectories(): void {
+  // Create base sessions directory
+  const sessionsDir = path.join(env.DATA_DIR, 'sessions');
+  if (!fs.existsSync(sessionsDir)) {
+    fs.mkdirSync(sessionsDir, { recursive: true });
+    logger.info({ dir: sessionsDir }, 'Created sessions directory');
+  }
+}
+
+export function ensureSessionDirectories(sessionId: string): void {
   const dirs = [
-    getDir('reactions'),
-    getDir('demos'),
-    getOutputDir()
+    getDir('reactions', sessionId),
+    getDir('demos', sessionId),
+    getOutputDir(sessionId)
   ];
 
   dirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      logger.info({ dir }, 'Created directory');
+      logger.debug({ dir }, 'Created session directory');
     }
   });
 }
 
-export function listFiles(type: FileType): FileInfo[] {
-  const dir = getDir(type);
+export function listFiles(type: FileType, sessionId: string): FileInfo[] {
+  ensureSessionDirectories(sessionId);
+  const dir = getDir(type, sessionId);
   if (!fs.existsSync(dir)) return [];
 
   return fs
@@ -63,9 +83,11 @@ export function listFiles(type: FileType): FileInfo[] {
 
 export async function saveFile(
   type: FileType,
-  file: File
+  file: File,
+  sessionId: string
 ): Promise<FileInfo> {
-  const dir = getDir(type);
+  ensureSessionDirectories(sessionId);
+  const dir = getDir(type, sessionId);
   const ext = path.extname(file.name);
   const id = randomUUID();
   const filename = `${id}${ext}`;
@@ -75,7 +97,7 @@ export async function saveFile(
   fs.writeFileSync(filePath, Buffer.from(buffer));
 
   const stats = fs.statSync(filePath);
-  logger.info({ type, filename, size: stats.size }, 'File saved');
+  logger.info({ type, filename, size: stats.size, sessionId }, 'File saved');
 
   return {
     id,
@@ -87,28 +109,31 @@ export async function saveFile(
   };
 }
 
-export function deleteFile(type: FileType, id: string): boolean {
-  const dir = getDir(type);
+export function deleteFile(type: FileType, id: string, sessionId: string): boolean {
+  const dir = getDir(type, sessionId);
+  if (!fs.existsSync(dir)) return false;
+  
   const files = fs.readdirSync(dir);
   const file = files.find((f) => f.startsWith(id));
 
   if (file) {
     const filePath = path.join(dir, file);
     fs.unlinkSync(filePath);
-    logger.info({ type, id }, 'File deleted');
+    logger.info({ type, id, sessionId }, 'File deleted');
     return true;
   }
 
   return false;
 }
 
-export function getFile(type: FileType, id: string): FileInfo | null {
-  const files = listFiles(type);
+export function getFile(type: FileType, id: string, sessionId: string): FileInfo | null {
+  const files = listFiles(type, sessionId);
   return files.find((f) => f.id === id) || null;
 }
 
-export function listOutputs(): FileInfo[] {
-  const dir = getOutputDir();
+export function listOutputs(sessionId: string): FileInfo[] {
+  ensureSessionDirectories(sessionId);
+  const dir = getOutputDir(sessionId);
   if (!fs.existsSync(dir)) return [];
 
   return fs
@@ -128,6 +153,32 @@ export function listOutputs(): FileInfo[] {
     });
 }
 
-export function getOutputPath(jobId: string, index: number): string {
-  return path.join(getOutputDir(), `tiktok_${jobId}_${index}.mp4`);
+export function getOutputPath(jobId: string, index: number, sessionId: string): string {
+  ensureSessionDirectories(sessionId);
+  return path.join(getOutputDir(sessionId), `tiktok_${jobId}_${index}.mp4`);
+}
+
+// Session-scoped hooks storage
+export function getHooks(sessionId: string): string[] {
+  const hooksPath = getHooksPath(sessionId);
+  if (fs.existsSync(hooksPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(hooksPath, 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+export function setHooks(sessionId: string, hooks: string[]): void {
+  ensureSessionDirectories(sessionId);
+  const hooksPath = getHooksPath(sessionId);
+  fs.writeFileSync(hooksPath, JSON.stringify(hooks, null, 2));
+  logger.info({ sessionId, count: hooks.length }, 'Hooks saved');
+}
+
+// Get output URL path for a session
+export function getOutputUrlPath(filename: string, sessionId: string): string {
+  return `/output/${sessionId}/${filename}`;
 }

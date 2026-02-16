@@ -5,8 +5,9 @@ import { logger } from '~/config/logger.js';
 
 export function registerUploadRoutes(app: OpenAPIHono) {
   app.openapi(listFilesRoute, async (c) => {
+    const sessionId = c.req.header('x-session-id') || 'default';
     const { type } = c.req.valid('param');
-    const files = listFiles(type);
+    const files = listFiles(type, sessionId);
 
     return c.json(
       files.map((f) => ({
@@ -21,6 +22,7 @@ export function registerUploadRoutes(app: OpenAPIHono) {
 
   app.openapi(uploadFilesRoute, async (c) => {
     try {
+      const sessionId = c.req.header('x-session-id') || 'default';
       const { type } = c.req.valid('param');
       const formData = await c.req.formData();
       const filesData = formData.getAll('files');
@@ -28,7 +30,7 @@ export function registerUploadRoutes(app: OpenAPIHono) {
       const savedFiles = [];
       for (const file of filesData) {
         if (file instanceof File) {
-          const saved = await saveFile(type, file);
+          const saved = await saveFile(type, file, sessionId);
           savedFiles.push({
             id: saved.id,
             filename: saved.filename,
@@ -39,7 +41,7 @@ export function registerUploadRoutes(app: OpenAPIHono) {
         }
       }
 
-      logger.info({ type, count: savedFiles.length }, 'Files uploaded');
+      logger.info({ type, count: savedFiles.length, sessionId }, 'Files uploaded');
       return c.json({ success: true, files: savedFiles });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -49,8 +51,9 @@ export function registerUploadRoutes(app: OpenAPIHono) {
   });
 
   app.openapi(deleteFileRoute, async (c) => {
+    const sessionId = c.req.header('x-session-id') || 'default';
     const { type, id } = c.req.valid('param');
-    deleteFile(type, id);
+    deleteFile(type, id, sessionId);
     return c.json({ success: true });
   });
 }

@@ -4,6 +4,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { bearerAuth } from 'hono/bearer-auth';
 import { cors } from 'hono/cors';
 import * as path from 'path';
+import * as fs from 'fs';
 import { env } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { registerUploadRoutes } from '~/components/upload/controller.js';
@@ -24,8 +25,33 @@ export function createApp() {
     logger.warn('⚠️  Authentication disabled - set AUTH_TOKEN to enable');
   }
 
+  // Session-scoped output files: /output/{sessionId}/{filename}
+  app.get('/output/:sessionId/:filename', async (c) => {
+    const { sessionId, filename } = c.req.param();
+    
+    // Sanitize sessionId to prevent directory traversal
+    const safeSessionId = sessionId.replace(/[^a-zA-Z0-9-]/g, '');
+    const safeFilename = path.basename(filename); // Prevent path traversal
+    
+    const filePath = path.join(env.DATA_DIR, 'sessions', safeSessionId, 'output', safeFilename);
+    
+    if (!fs.existsSync(filePath)) {
+      return c.json({ error: 'File not found' }, 404);
+    }
+    
+    const stat = fs.statSync(filePath);
+    const stream = fs.createReadStream(filePath);
+    
+    return new Response(stream as any, {
+      headers: {
+        'Content-Type': 'video/mp4',
+        'Content-Length': stat.size.toString(),
+        'Content-Disposition': `inline; filename="${safeFilename}"`
+      }
+    });
+  });
+
   // Static files
-  app.use('/output/*', serveStatic({ root: path.join(env.DATA_DIR) }));
   app.use('/*', serveStatic({ root: './public' }));
 
   // Health check

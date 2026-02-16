@@ -4,7 +4,7 @@ import { logger } from '~/config/logger.js';
 import { QUEUE_NAME, JobType, GenerateVideoDataSchema } from '~/queue/index.js';
 import type { GenerateVideoData, JobResult } from '~/queue/index.js';
 import { generateTikTokVideo } from '~/utils/ffmpeg.js';
-import { ensureDirectories } from '~/utils/storage.js';
+import { ensureDirectories, getOutputUrlPath } from '~/utils/storage.js';
 
 // Initialize
 ensureDirectories();
@@ -31,10 +31,11 @@ async function processJob(job: Job<GenerateVideoData, JobResult>): Promise<JobRe
 
     logger.info({ jobId: job.id, outputPath }, 'Video generation completed');
 
+    const filename = outputPath.split('/').pop() || '';
     return {
       success: true,
       outputPath,
-      outputUrl: `/output/${outputPath.split('/').pop()}`
+      outputUrl: getOutputUrlPath(filename, data.sessionId)
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

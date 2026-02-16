@@ -1,43 +1,44 @@
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { generateRoute, jobStatusRoute } from './schemas.js';
 import { addJob, getJobStatus, updateJobStatus, queue } from '~/queue/index.js';
-import { getFile, getOutputPath } from '~/utils/storage.js';
+import { getFile, getOutputPath, getHooks, getOutputUrlPath } from '~/utils/storage.js';
 import { env, hasRedis } from '~/config/env.js';
 import { logger } from '~/config/logger.js';
 import { randomUUID } from 'crypto';
 import { generateTikTokVideo } from '~/utils/ffmpeg.js';
-import { getHooks } from '~/components/hooks/controller.js';
 
 export function registerGenerateRoutes(app: OpenAPIHono) {
   app.openapi(generateRoute, async (c) => {
+    const sessionId = c.req.header('x-session-id') || 'default';
     const { combinations, textSettings } = c.req.valid('json');
 
     if (!combinations || combinations.length === 0) {
       return c.json({ error: 'No combinations specified' }, 400);
     }
 
-    const hooks = getHooks();
+    const hooks = getHooks(sessionId);
     const batchId = randomUUID();
     const jobIds: string[] = [];
 
     for (let i = 0; i < combinations.length; i++) {
       const combo = combinations[i];
-      const reaction = getFile('reactions', combo.reactionId);
-      const demo = getFile('demos', combo.demoId);
+      const reaction = getFile('reactions', combo.reactionId, sessionId);
+      const demo = getFile('demos', combo.demoId, sessionId);
       const hookText = combo.hookIndex >= 0 && hooks[combo.hookIndex] ? hooks[combo.hookIndex] : '';
 
       if (!reaction || !demo) {
-        logger.warn({ combo }, 'Missing files for combination');
+        logger.warn({ combo, sessionId }, 'Missing files for combination');
         continue;
       }
 
-      const outputPath = getOutputPath(batchId, i + 1);
+      const outputPath = getOutputPath(batchId, i + 1, sessionId);
 
       const jobData = {
         reactionPath: reaction.path,
         demoPath: demo.path,
         hookText,
         outputPath,
+        sessionId, // Pass sessionId for output URL generation
         reactionDuration: env.REACTION_DURATION,
         width: env.OUTPUT_WIDTH,
         height: env.OUTPUT_HEIGHT,
@@ -58,7 +59,7 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       }
     }
 
-    logger.info({ batchId, jobCount: jobIds.length }, 'Generation batch started');
+    logger.info({ batchId, jobCount: jobIds.length, sessionId }, 'Generation batch started');
 
     return c.json({
       success: true,
@@ -90,6 +91,7 @@ async function processJobSync(jobId: string, data: {
   demoPath: string;
   hookText: string;
   outputPath: string;
+  sessionId?: string;
   reactionDuration: number;
   width: number;
   height: number;
@@ -104,11 +106,13 @@ async function processJobSync(jobId: string, data: {
     logger.info({ jobId, outputPath: data.outputPath }, 'Processing video (sync mode)');
     
     const outputPath = await generateTikTokVideo(data);
+    const filename = outputPath.split('/').pop() || '';
+    const sessionId = data.sessionId || 'default';
     
     updateJobStatus(jobId, 'completed', 100, {
       success: true,
       outputPath,
-      outputUrl: `/output/${outputPath.split('/').pop()}`
+      outputUrl: getOutputUrlPath(filename, sessionId)
     });
     
     logger.info({ jobId, outputPath }, 'Video generation completed (sync mode)');

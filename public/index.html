@@ -764,9 +764,33 @@ this app changed my life"></textarea>
   <script>
     const API = '';
     let state = { reactions: [], demos: [], hooks: [] };
+    
+    // Session management - each browser gets a unique session
+    function getSessionId() {
+      let sessionId = localStorage.getItem('tiktok-editor-session');
+      if (!sessionId) {
+        sessionId = 'sess_' + crypto.randomUUID();
+        localStorage.setItem('tiktok-editor-session', sessionId);
+      }
+      return sessionId;
+    }
+    
+    const SESSION_ID = getSessionId();
+    
+    // Helper to add session header to all requests
+    function fetchWithSession(url, options = {}) {
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'X-Session-ID': SESSION_ID
+        }
+      });
+    }
 
     // Initialize
     async function init() {
+      console.log('Session ID:', SESSION_ID);
       await Promise.all([
         loadFiles('reactions'),
         loadFiles('demos'),
@@ -796,7 +820,7 @@ this app changed my life"></textarea>
     // Load files
     async function loadFiles(type) {
       try {
-        const res = await fetch(API + '/api/files/' + type);
+        const res = await fetchWithSession(API + '/api/files/' + type);
         state[type] = await res.json();
         renderFiles(type);
         updateStats();
@@ -831,7 +855,7 @@ this app changed my life"></textarea>
 
     // Delete file
     async function deleteFile(type, id) {
-      await fetch(API + '/api/files/' + type + '/' + id, { method: 'DELETE' });
+      await fetchWithSession(API + '/api/files/' + type + '/' + id, { method: 'DELETE' });
       await loadFiles(type);
       showToast('File deleted');
     }
@@ -839,7 +863,7 @@ this app changed my life"></textarea>
     // Load hooks
     async function loadHooks() {
       try {
-        const res = await fetch(API + '/api/hooks');
+        const res = await fetchWithSession(API + '/api/hooks');
         state.hooks = await res.json();
         document.getElementById('hooks-input').value = state.hooks.join('\n');
         document.getElementById('hooks-count').textContent = state.hooks.length + ' hooks';
@@ -854,7 +878,7 @@ this app changed my life"></textarea>
       const text = document.getElementById('hooks-input').value;
       state.hooks = text.split('\n').filter(h => h.trim());
       
-      await fetch(API + '/api/hooks', {
+      await fetchWithSession(API + '/api/hooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ hooks: state.hooks })
@@ -911,7 +935,7 @@ this app changed my life"></textarea>
       showToast('Uploading ' + files.length + ' file(s)...', 'info');
       
       try {
-        const res = await fetch(API + '/api/files/' + type, {
+        const res = await fetchWithSession(API + '/api/files/' + type, {
           method: 'POST',
           body: formData
         });
@@ -975,7 +999,7 @@ this app changed my life"></textarea>
       document.getElementById('progress-text').textContent = 'Starting generation...';
       
       try {
-        const res = await fetch(API + '/api/generate', {
+        const res = await fetchWithSession(API + '/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ combinations, textSettings })
@@ -1007,7 +1031,7 @@ this app changed my life"></textarea>
         
         for (const id of jobIds) {
           try {
-            const res = await fetch(API + '/api/jobs/' + id);
+            const res = await fetchWithSession(API + '/api/jobs/' + id);
             const job = await res.json();
             
             if (job.state === 'completed' || job.state === 'failed') {
@@ -1042,7 +1066,7 @@ this app changed my life"></textarea>
     // Load outputs
     async function loadOutputs() {
       try {
-        const res = await fetch(API + '/api/outputs');
+        const res = await fetchWithSession(API + '/api/outputs');
         const outputs = await res.json();
         
         const grid = document.getElementById('outputs-grid');

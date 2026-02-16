@@ -23,6 +23,7 @@ export const GenerateVideoDataSchema = z.object({
   demoPath: z.string(),
   hookText: z.string(),
   outputPath: z.string(),
+  sessionId: z.string().default('default'),
   reactionDuration: z.number().default(4.5),
   width: z.number().default(1080),
   height: z.number().default(1920),
