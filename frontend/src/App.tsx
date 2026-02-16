@@ -509,30 +509,28 @@ function App() {
             </div>
             
             {useLibrary ? (
-              <div className="border-2 border-dashed border-border rounded-xl p-4">
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {libraryReactions.map(f => (
-                    <div 
-                      key={f.id} 
-                      className={cn(
-                        "flex items-center justify-between py-2 px-3 rounded-lg cursor-pointer transition-colors",
-                        singleMode && selectedReaction === f.id 
-                          ? "bg-primary text-primary-foreground" 
-                          : "bg-muted/50 hover:bg-muted"
-                      )}
-                      onClick={() => singleMode && setSelectedReaction(f.id)}
+              <div className="border-2 border-border rounded-xl p-4 bg-muted/20">
+                {singleMode ? (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-3">Select one Broll:</p>
+                    <select
+                      value={selectedReaction}
+                      onChange={(e) => setSelectedReaction(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-lg text-sm"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Upload className="w-4 h-4 shrink-0 opacity-60" />
-                        <span className="text-sm truncate">{f.filename}</span>
-                      </div>
-                      <span className="text-xs opacity-60">{formatBytes(f.size)}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 text-center">
-                  {singleMode ? 'Click to select one' : `${libraryReactions.length} DansUGC Brolls`}
-                </p>
+                      <option value="">Choose a Broll...</option>
+                      {libraryReactions.map(f => (
+                        <option key={f.id} value={f.id}>{f.filename}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : (
+                  <div className="text-center py-6">
+                    <div className="text-3xl font-bold text-foreground">{libraryReactions.length}</div>
+                    <p className="text-sm text-muted-foreground mt-1">DansUGC Brolls ready</p>
+                    <p className="text-xs text-muted-foreground mt-2">All will be combined with your demos</p>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -549,6 +547,11 @@ function App() {
                     ))}
                   </select>
                 )}
+                {!singleMode && reactions.length > 0 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    All {reactions.length} uploads will be used
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -556,16 +559,24 @@ function App() {
           <div className="space-y-4">
             <DropZone type="demos" files={demos} icon={Play} accept="video/*" label="App Demos" />
             {singleMode && demos.length > 0 && (
-              <select
-                value={selectedDemo}
-                onChange={(e) => setSelectedDemo(e.target.value)}
-                className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
-              >
-                <option value="">Select demo...</option>
-                {demos.map(d => (
-                  <option key={d.id} value={d.id}>{d.originalName}</option>
-                ))}
-              </select>
+              <>
+                <p className="text-xs text-muted-foreground">Select one demo:</p>
+                <select
+                  value={selectedDemo}
+                  onChange={(e) => setSelectedDemo(e.target.value)}
+                  className="w-full h-10 px-3 bg-muted/50 border border-border rounded-lg text-sm"
+                >
+                  <option value="">Choose a demo...</option>
+                  {demos.map(d => (
+                    <option key={d.id} value={d.id}>{d.originalName}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            {!singleMode && demos.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center">
+                All {demos.length} demos will be used
+              </p>
             )}
           </div>
           
@@ -626,7 +637,10 @@ function App() {
             <div>
               <h2 className="text-lg font-semibold mb-1">Generate Videos</h2>
               <p className="text-sm text-muted-foreground">
-                {singleMode ? '1 video' : `${totalCombinations} combinations`} • {hooks.length} hooks
+                {singleMode 
+                  ? '1 video (selected pair)' 
+                  : `${totalCombinations} videos (${activeReactions.length} reactions × ${demos.length} demos)`
+                } • {hooks.length} hooks
               </p>
               {/* Mode toggle */}
               <div className="flex items-center gap-2 mt-3">
