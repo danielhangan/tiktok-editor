@@ -556,19 +556,103 @@ function App() {
 
           {/* Right Column */}
           <div className="space-y-6">
-            {/* Preview */}
-            <div className="bg-muted/30 border border-border rounded-2xl p-5 aspect-[9/14] flex items-center justify-center">
-              {selectedTemplateData ? (
-                <video
-                  src={selectedTemplateData.url}
-                  className="max-h-full max-w-full rounded-xl"
-                  controls
-                  muted
-                  playsInline
-                />
-              ) : (
-                <p className="text-muted-foreground">Select a template to preview</p>
+            {/* Live Preview */}
+            <div className="bg-muted/30 border border-border rounded-2xl p-4">
+              <h2 className="font-semibold mb-3">Preview</h2>
+              
+              <div className="relative aspect-[9/16] bg-black rounded-xl overflow-hidden">
+                {selectedTemplateData ? (
+                  <>
+                    {/* Template video with text overlay */}
+                    <video
+                      src={selectedTemplateData.url}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                    />
+                    
+                    {/* Text overlay */}
+                    {hooksText && (
+                      <div 
+                        className={cn(
+                          "absolute left-0 right-0 px-4 flex justify-center",
+                          textPosition === 'top' && "top-[15%]",
+                          textPosition === 'center' && "top-1/2 -translate-y-1/2",
+                          textPosition === 'bottom' && "bottom-[25%]"
+                        )}
+                      >
+                        <p 
+                          className="text-white text-center font-bold leading-tight"
+                          style={{ 
+                            fontSize: '14px',
+                            textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                            maxWidth: '60%',
+                            whiteSpace: 'pre-wrap'
+                          }}
+                        >
+                          {hooksText.split('\n')[0] || 'Your text here...'}
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Section indicator */}
+                    <div className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+                      UGC Reaction
+                    </div>
+                  </>
+                ) : demos.length > 0 ? (
+                  <>
+                    {/* Show demo if no template selected */}
+                    <video
+                      src={`/api/files/demos/${demos[0].id}/preview`}
+                      className="absolute inset-0 w-full h-full object-cover opacity-50"
+                      muted
+                      playsInline
+                      preload="metadata"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <p className="text-white/80 text-sm">Select a template above</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <p className="text-muted-foreground text-sm text-center px-4">
+                      Select a template and upload demos to preview
+                    </p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Demo preview below */}
+              {selectedTemplateData && demos.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs text-muted-foreground mb-2">Then plays → Call to Action:</p>
+                  <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-32">
+                    <video
+                      src={`/api/files/demos/${demos[0].id}/preview`}
+                      className="w-full h-full object-cover"
+                      muted
+                      playsInline
+                      preload="metadata"
+                      onMouseEnter={(e) => e.currentTarget.play()}
+                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
+                    />
+                    <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                      Demo
+                    </div>
+                  </div>
+                </div>
               )}
+              
+              {/* Summary */}
+              <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
+                <p>✓ Template: {selectedTemplateData ? selectedTemplateData.filename : 'None selected'}</p>
+                <p>✓ Demos: {demos.length} video{demos.length !== 1 ? 's' : ''}</p>
+                <p>✓ Text: {hooksText ? `"${hooksText.slice(0, 30)}${hooksText.length > 30 ? '...' : ''}"` : 'None'}</p>
+                <p>✓ Music: {selectedMusic ? (selectedMusic === 'random' ? 'Random' : 'Selected') : 'None'}</p>
+              </div>
             </div>
 
             {/* Music */}
