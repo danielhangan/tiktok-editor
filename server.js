@@ -25,6 +25,9 @@ app.use(express.static('public'));
 app.use('/output', express.static(OUTPUT_DIR));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Health check for Railway
+app.get('/health', (req, res) => res.status(200).send('OK'));
+
 // Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {

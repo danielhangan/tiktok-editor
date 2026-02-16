@@ -21,8 +21,9 @@ COPY . .
 # Create directories
 RUN mkdir -p uploads/reactions uploads/demos output
 
-# Expose port
-EXPOSE 3456
+# Railway sets PORT dynamically
+ENV PORT=3456
+EXPOSE $PORT
 
 # Start
 CMD ["node", "server.js"]
