@@ -12,14 +12,25 @@ const PORT = process.env.PORT || 3456;
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
-app.use('/output', express.static('output'));
-app.use('/uploads', express.static('uploads'));
+app.use('/output', express.static(OUTPUT_DIR));
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Use persistent volume in production, local in dev
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || '.';
+const UPLOADS_DIR = `${DATA_DIR}/uploads`;
+const OUTPUT_DIR = `${DATA_DIR}/output`;
+
+// Ensure directories exist
+const fs_sync = require('fs');
+[`${UPLOADS_DIR}/reactions`, `${UPLOADS_DIR}/demos`, OUTPUT_DIR].forEach(dir => {
+  if (!fs_sync.existsSync(dir)) fs_sync.mkdirSync(dir, { recursive: true });
+});
 
 // Storage config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const type = req.params.type; // 'reactions' or 'demos'
-    cb(null, `uploads/${type}`);
+    cb(null, `${UPLOADS_DIR}/${type}`);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -43,13 +54,13 @@ const state = {
 // Load existing files on startup
 function loadExistingFiles() {
   ['reactions', 'demos'].forEach(type => {
-    const dir = `uploads/${type}`;
+    const dir = `${UPLOADS_DIR}/${type}`;
     if (fs.existsSync(dir)) {
       const files = fs.readdirSync(dir).filter(f => /\.(mp4|mov|MOV)$/i.test(f));
       state[type] = files.map(f => ({
         id: uuidv4(),
         filename: f,
-        path: `uploads/${type}/${f}`,
+        path: `${UPLOADS_DIR}/${type}/${f}`,
         originalName: f
       }));
     }
@@ -217,7 +228,7 @@ app.post('/api/generate', async (req, res) => {
         continue;
       }
       
-      const outputFile = `output/tiktok_${jobId}_${job.completed + 1}.mp4`;
+      const outputFile = `${OUTPUT_DIR}/tiktok_${jobId}_${job.completed + 1}.mp4`;
       await createVideo(reaction, demo, hook, outputFile);
       
       job.outputs.push({
@@ -245,15 +256,14 @@ app.get('/api/jobs/:id', (req, res) => {
 
 // Get all outputs
 app.get('/api/outputs', (req, res) => {
-  const outputDir = 'output';
-  if (!fs.existsSync(outputDir)) return res.json([]);
+  if (!fs.existsSync(OUTPUT_DIR)) return res.json([]);
   
-  const files = fs.readdirSync(outputDir)
+  const files = fs.readdirSync(OUTPUT_DIR)
     .filter(f => f.endsWith('.mp4'))
     .map(f => ({
       filename: f,
       url: `/output/${f}`,
-      size: fs.statSync(`${outputDir}/${f}`).size
+      size: fs.statSync(`${OUTPUT_DIR}/${f}`).size
     }));
   res.json(files);
 });
