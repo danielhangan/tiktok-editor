@@ -716,7 +716,7 @@ function App() {
                 variant="accent" 
                 size="lg"
                 onClick={generate}
-                disabled={isGenerating || !reactions.length || !demos.length}
+                disabled={isGenerating || !activeReactions.length || !demos.length}
                 className="min-w-[140px]"
               >
                 {isGenerating ? (
