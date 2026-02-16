@@ -685,6 +685,45 @@ this app changed my life"></textarea>
         </div>
       </div>
 
+      <div class="generate-options" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+        <div class="option-group">
+          <label>📝 Text Width:</label>
+          <select id="text-max-width">
+            <option value="40">40%</option>
+            <option value="50">50%</option>
+            <option value="60" selected>60%</option>
+            <option value="70">70%</option>
+            <option value="80">80%</option>
+            <option value="90">90%</option>
+          </select>
+        </div>
+        <div class="option-group">
+          <label>Font Size:</label>
+          <select id="text-font-size">
+            <option value="28">Small (28)</option>
+            <option value="38" selected>Medium (38)</option>
+            <option value="48">Large (48)</option>
+            <option value="58">XL (58)</option>
+          </select>
+        </div>
+        <div class="option-group">
+          <label>Align:</label>
+          <select id="text-align">
+            <option value="left">Left</option>
+            <option value="center" selected>Center</option>
+            <option value="right">Right</option>
+          </select>
+        </div>
+        <div class="option-group">
+          <label>Position:</label>
+          <select id="text-position">
+            <option value="top">Top</option>
+            <option value="center" selected>Center</option>
+            <option value="bottom">Bottom</option>
+          </select>
+        </div>
+      </div>
+
       <div class="generate-actions">
         <button class="btn btn-primary" id="generate-btn" onclick="generateVideos()">
           ✨ Generate Videos
@@ -904,6 +943,14 @@ this app changed my life"></textarea>
         return;
       }
       
+      // Get text settings
+      const textSettings = {
+        maxWidthPercent: parseInt(document.getElementById('text-max-width').value),
+        fontSize: parseInt(document.getElementById('text-font-size').value),
+        align: document.getElementById('text-align').value,
+        position: document.getElementById('text-position').value
+      };
+      
       // Build all combinations
       let combinations = [];
       for (const reaction of state.reactions) {
@@ -931,7 +978,7 @@ this app changed my life"></textarea>
         const res = await fetch(API + '/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ combinations })
+          body: JSON.stringify({ combinations, textSettings })
         });
         
         const data = await res.json();

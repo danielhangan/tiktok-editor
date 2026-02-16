@@ -7,6 +7,13 @@ const CombinationSchema = z.object({
   hookIndex: z.number()
 });
 
+const TextSettingsSchema = z.object({
+  maxWidthPercent: z.number().min(20).max(100).default(60),
+  align: z.enum(['left', 'center', 'right']).default('center'),
+  fontSize: z.number().min(16).max(80).default(38),
+  position: z.enum(['top', 'center', 'bottom']).default('center')
+}).optional();
+
 const JobStatusSchema = z.object({
   id: z.string(),
   state: z.string(),
@@ -28,7 +35,8 @@ export const generateRoute = createRoute({
       content: {
         'application/json': {
           schema: z.object({
-            combinations: z.array(CombinationSchema)
+            combinations: z.array(CombinationSchema),
+            textSettings: TextSettingsSchema
           })
         }
       }

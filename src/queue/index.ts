@@ -25,7 +25,12 @@ export const GenerateVideoDataSchema = z.object({
   outputPath: z.string(),
   reactionDuration: z.number().default(4.5),
   width: z.number().default(1080),
-  height: z.number().default(1920)
+  height: z.number().default(1920),
+  // Text styling options
+  textMaxWidthPercent: z.number().min(20).max(100).default(60),
+  textAlign: z.enum(['left', 'center', 'right']).default('center'),
+  fontSize: z.number().min(16).max(80).default(38),
+  textPosition: z.enum(['top', 'center', 'bottom']).default('center')
 });
 
 export type GenerateVideoData = z.infer<typeof GenerateVideoDataSchema>;

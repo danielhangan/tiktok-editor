@@ -10,7 +10,7 @@ import { getHooks } from '~/components/hooks/controller.js';
 
 export function registerGenerateRoutes(app: OpenAPIHono) {
   app.openapi(generateRoute, async (c) => {
-    const { combinations } = c.req.valid('json');
+    const { combinations, textSettings } = c.req.valid('json');
 
     if (!combinations || combinations.length === 0) {
       return c.json({ error: 'No combinations specified' }, 400);
@@ -40,7 +40,12 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
         outputPath,
         reactionDuration: env.REACTION_DURATION,
         width: env.OUTPUT_WIDTH,
-        height: env.OUTPUT_HEIGHT
+        height: env.OUTPUT_HEIGHT,
+        // Text styling options
+        textMaxWidthPercent: textSettings?.maxWidthPercent ?? 60,
+        textAlign: textSettings?.align ?? 'center',
+        fontSize: textSettings?.fontSize ?? 38,
+        textPosition: textSettings?.position ?? 'center'
       };
 
       const jobId = await addJob(jobData);
@@ -88,6 +93,10 @@ async function processJobSync(jobId: string, data: {
   reactionDuration: number;
   width: number;
   height: number;
+  textMaxWidthPercent?: number;
+  textAlign?: 'left' | 'center' | 'right';
+  fontSize?: number;
+  textPosition?: 'top' | 'center' | 'bottom';
 }) {
   updateJobStatus(jobId, 'active', 10);
   
