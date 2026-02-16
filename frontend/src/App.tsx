@@ -416,7 +416,7 @@ function App() {
                     key={t.id}
                     onClick={() => setSelectedTemplate(t.id)}
                     className={cn(
-                      "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all",
+                      "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all select-none",
                       selectedTemplate === t.id 
                         ? "ring-2 ring-primary ring-offset-2" 
                         : "hover:ring-2 hover:ring-muted-foreground/50"
@@ -424,10 +424,13 @@ function App() {
                   >
                     <video
                       src={t.url}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover pointer-events-none"
                       muted
                       playsInline
                       preload="metadata"
+                      controlsList="nodownload nofullscreen noremoteplayback"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
                       onMouseEnter={(e) => e.currentTarget.play()}
                       onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
                     />
@@ -571,6 +574,9 @@ function App() {
                       loop
                       muted
                       playsInline
+                      controlsList="nodownload nofullscreen noremoteplayback"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
                     />
                     
                     {/* Text overlay */}
