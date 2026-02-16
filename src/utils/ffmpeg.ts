@@ -66,15 +66,28 @@ function wrapText(text: string, options: TextOptions): string {
     // If we're at max lines and can't fit, the word is dropped (truncated)
   });
 
-  return lines.filter(line => line.length > 0).join('\\n');
+  // Join with actual newline character - escapeFFmpegText will convert to \n for FFmpeg
+  return lines.filter(line => line.length > 0).join('\n');
 }
 
 function escapeFFmpegText(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "'\\''")
-    .replace(/:/g, '\\:')
-    .replace(/\n/g, '\\n');
+  // FFmpeg drawtext filter escaping (for use inside single quotes)
+  // Order matters!
+  let escaped = text;
+  
+  // 1. Escape backslashes first (\ -> \\)
+  escaped = escaped.replace(/\\/g, '\\\\');
+  
+  // 2. Escape single quotes for shell (break out of quotes)
+  escaped = escaped.replace(/'/g, "'\\''");
+  
+  // 3. Escape colons (FFmpeg filter option separator)
+  escaped = escaped.replace(/:/g, '\\:');
+  
+  // 4. Convert actual newlines to FFmpeg newline escape
+  escaped = escaped.replace(/\n/g, '\\n');
+  
+  return escaped;
 }
 
 function runFFmpeg(args: string[]): Promise<void> {
