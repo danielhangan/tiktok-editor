@@ -151,6 +151,9 @@ function App() {
   const [templateDuration, setTemplateDuration] = useState('')
   const [demoStart, setDemoStart] = useState('')
   const [demoDuration, setDemoDuration] = useState('')
+  
+  // Selected demo for preview
+  const [selectedDemo, setSelectedDemo] = useState('')
 
   // All available templates (library + uploads)
   const allTemplates = [
@@ -506,16 +509,28 @@ function App() {
               {demos.length > 0 && (
                 <div className="mt-4 space-y-2">
                   {demos.map(d => (
-                    <div key={d.id} className="flex items-center justify-between py-2 px-3 bg-muted/30 rounded-lg group">
+                    <div 
+                      key={d.id} 
+                      onClick={() => setSelectedDemo(d.id)}
+                      className={cn(
+                        "flex items-center justify-between py-2 px-3 rounded-lg group cursor-pointer transition-all",
+                        selectedDemo === d.id 
+                          ? "bg-primary text-primary-foreground" 
+                          : "bg-muted/30 hover:bg-muted"
+                      )}
+                    >
                       <div className="flex items-center gap-2 min-w-0">
-                        <Play className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <Play className="w-4 h-4 shrink-0 opacity-60" />
                         <span className="text-sm truncate">{d.originalName}</span>
                       </div>
                       <button
-                        onClick={() => deleteFile('demos', d.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-background rounded transition-all"
+                        onClick={(e) => { e.stopPropagation(); deleteFile('demos', d.id) }}
+                        className={cn(
+                          "opacity-0 group-hover:opacity-100 p-1 rounded transition-all",
+                          selectedDemo === d.id ? "hover:bg-white/20" : "hover:bg-background"
+                        )}
                       >
-                        <Trash2 className="w-4 h-4 text-muted-foreground" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
@@ -632,30 +647,34 @@ function App() {
               </div>
               
               {/* Demo preview below */}
-              {selectedTemplateData && demos.length > 0 && (
+              {demos.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-2">Then plays → Call to Action:</p>
-                  <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-32">
-                    <video
-                      src={`/api/files/demos/${demos[0].id}/preview`}
-                      className="w-full h-full object-cover"
-                      muted
-                      playsInline
-                      preload="metadata"
-                      onMouseEnter={(e) => e.currentTarget.play()}
-                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
-                    />
-                    <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      Demo
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {selectedDemo ? 'Selected Demo:' : 'Click a demo to preview →'}
+                  </p>
+                  {selectedDemo && (
+                    <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-40">
+                      <video
+                        key={selectedDemo}
+                        src={`/api/files/demos/${selectedDemo}/preview`}
+                        className="w-full h-full object-cover"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                      />
+                      <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                        Call to Action
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
               
               {/* Summary */}
               <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
                 <p>✓ Template: {selectedTemplateData ? selectedTemplateData.filename : 'None selected'}</p>
-                <p>✓ Demos: {demos.length} video{demos.length !== 1 ? 's' : ''}</p>
+                <p>✓ Demo: {selectedDemo ? demos.find(d => d.id === selectedDemo)?.originalName : `${demos.length} uploaded`}</p>
                 <p>✓ Text: {hooksText ? `"${hooksText.slice(0, 30)}${hooksText.length > 30 ? '...' : ''}"` : 'None'}</p>
                 <p>✓ Music: {selectedMusic ? (selectedMusic === 'random' ? 'Random' : 'Selected') : 'None'}</p>
               </div>
