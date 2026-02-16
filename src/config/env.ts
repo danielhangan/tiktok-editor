@@ -31,7 +31,10 @@ const schema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_PUBLIC_URL: z.string().optional(),
 
-  AUTH_TOKEN: z.string().optional()
+  AUTH_TOKEN: z.string().optional(),
+  
+  // Scrapecreators API for TikTok extraction
+  SCRAPECREATORS_API_KEY: z.string().optional()
 });
 
 export const env = schema.parse(process.env);

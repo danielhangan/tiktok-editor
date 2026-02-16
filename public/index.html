@@ -655,6 +655,20 @@ this app changed my life"></textarea>
           </div>
           <span class="card-count" id="music-count">0 tracks</span>
         </div>
+        
+        <!-- TikTok URL Extractor -->
+        <div style="margin-bottom: 16px; padding: 16px; background: var(--bg-tertiary); border-radius: 12px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="font-size: 20px;">🔗</span>
+            <input type="text" id="tiktok-url" placeholder="Paste TikTok URL to extract sound..." 
+              style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text-primary); font-size: 14px;">
+            <button class="btn btn-primary btn-sm" onclick="extractTikTokAudio()" id="extract-btn">
+              ⚡ Extract
+            </button>
+          </div>
+          <div id="extract-status" style="margin-top: 8px; font-size: 12px; color: var(--text-secondary); display: none;"></div>
+        </div>
+        
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
           <div>
             <div class="dropzone" id="music-dropzone">
@@ -948,6 +962,69 @@ this app changed my life"></textarea>
       };
       
       input.onchange = () => uploadFiles('music', input.files);
+      
+      // Allow Enter key to trigger extraction
+      const urlInput = document.getElementById('tiktok-url');
+      if (urlInput) {
+        urlInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') extractTikTokAudio();
+        });
+      }
+    }
+    
+    // Extract audio from TikTok URL
+    async function extractTikTokAudio() {
+      const urlInput = document.getElementById('tiktok-url');
+      const btn = document.getElementById('extract-btn');
+      const status = document.getElementById('extract-status');
+      const url = urlInput.value.trim();
+      
+      if (!url) {
+        showToast('Please enter a TikTok URL', 'error');
+        return;
+      }
+      
+      // Validate URL looks like TikTok
+      if (!url.includes('tiktok.com')) {
+        showToast('Please enter a valid TikTok URL', 'error');
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = '⏳ Extracting...';
+      status.style.display = 'block';
+      status.textContent = '🔄 Fetching video info...';
+      
+      try {
+        const res = await fetchWithSession(API + '/api/tiktok/extract-audio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+          status.textContent = '✅ Extracted: ' + (data.title || data.filename);
+          status.style.color = 'var(--success)';
+          urlInput.value = '';
+          showToast('Sound extracted: ' + (data.title || 'TikTok audio'), 'success');
+          await loadFiles('music');
+        } else {
+          throw new Error(data.message || data.error || 'Extraction failed');
+        }
+      } catch (err) {
+        status.textContent = '❌ ' + err.message;
+        status.style.color = 'var(--danger)';
+        showToast('Extraction failed: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⚡ Extract';
+        setTimeout(() => {
+          status.style.display = 'none';
+          status.style.color = 'var(--text-secondary)';
+        }, 5000);
+      }
     }
 
     // Delete file
