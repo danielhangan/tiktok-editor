@@ -389,7 +389,7 @@ function App() {
         <div className="max-w-6xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">TikTok Editor</h1>
+              <h1 className="text-xl font-semibold tracking-tight">ClawdClipper</h1>
               <p className="text-sm text-muted-foreground">Create viral UGC videos at scale</p>
             </div>
           </div>
