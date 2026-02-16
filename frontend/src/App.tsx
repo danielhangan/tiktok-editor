@@ -424,8 +424,13 @@ function App() {
         <div className="max-w-6xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">ClawdClipper</h1>
-              <p className="text-sm text-muted-foreground">Create viral UGC videos at scale</p>
+              <div className="flex items-center gap-3">
+              <img src="/favicon.svg" alt="ClawdClipper" className="w-9 h-9" />
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight">ClawdClipper</h1>
+                <p className="text-sm text-muted-foreground">Create viral UGC videos at scale</p>
+              </div>
+            </div>
             </div>
           </div>
         </div>

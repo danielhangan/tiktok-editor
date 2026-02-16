@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366F1;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="46" fill="url(#grad)"/>
+  <!-- Claw/Scissors hybrid - stylized -->
+  <!-- Top blade -->
+  <path d="M25 35 L50 50 L45 42 L28 32 Z" fill="white" opacity="0.95"/>
+  <!-- Bottom blade -->
+  <path d="M25 65 L50 50 L45 58 L28 68 Z" fill="white" opacity="0.95"/>
+  <!-- Handle circles -->
+  <circle cx="22" cy="32" r="8" fill="none" stroke="white" stroke-width="4"/>
+  <circle cx="22" cy="68" r="8" fill="none" stroke="white" stroke-width="4"/>
+  <!-- Film strip accent -->
+  <rect x="58" y="30" width="18" height="40" rx="2" fill="white" opacity="0.9"/>
+  <rect x="61" y="34" width="5" height="4" fill="url(#grad)"/>
+  <rect x="68" y="34" width="5" height="4" fill="url(#grad)"/>
+  <rect x="61" y="42" width="5" height="4" fill="url(#grad)"/>
+  <rect x="68" y="42" width="5" height="4" fill="url(#grad)"/>
+  <rect x="61" y="50" width="5" height="4" fill="url(#grad)"/>
+  <rect x="68" y="50" width="5" height="4" fill="url(#grad)"/>
+  <rect x="61" y="58" width="5" height="4" fill="url(#grad)"/>
+  <rect x="68" y="58" width="5" height="4" fill="url(#grad)"/>
+</svg>
