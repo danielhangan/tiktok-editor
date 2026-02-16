@@ -1,7 +1,8 @@
 node_modules/
-uploads/
-output/
+dist/
+data/
 *.mp4
 *.mov
 *.MOV
 .env
+.DS_Store
