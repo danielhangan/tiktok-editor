@@ -71,28 +71,29 @@ function wrapText(text: string, options: TextOptions): string {
 }
 
 function escapeFFmpegText(text: string): string {
-  // FFmpeg drawtext filter escaping for filter_complex
-  // FFmpeg does TWO levels of parsing: filter syntax, then drawtext parsing
-  // So we need double-escaping for special chars
-  let escaped = text;
+  // FFmpeg drawtext filter escaping
+  // We wrap text in single quotes, so we need to handle special chars
   
-  // 1. Escape backslashes first (\ -> \\\\) - double for filter + drawtext parsing
-  escaped = escaped.replace(/\\/g, '\\\\\\\\');
+  // 1. Escape backslashes first (must be before newline replacement)
+  let escaped = text.replace(/\\/g, '\\\\');
   
-  // 2. Escape single quotes 
-  escaped = escaped.replace(/'/g, "\\\\'");
+  // 2. Escape single quotes for FFmpeg filter syntax
+  escaped = escaped.replace(/'/g, "\\'");
   
-  // 3. Escape colons (FFmpeg filter option separator) 
-  escaped = escaped.replace(/:/g, '\\\\:');
+  // 3. Escape colons (FFmpeg filter option separator)
+  escaped = escaped.replace(/:/g, '\\:');
   
-  // 4. Convert newlines to \\n (double-escaped so FFmpeg interprets as newline)
-  escaped = escaped.replace(/\n/g, '\\\\n');
+  // 4. Convert newlines to \n for FFmpeg drawtext
+  escaped = escaped.replace(/\n/g, '\\n');
   
   return escaped;
 }
 
 function runFFmpeg(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Log the exact FFmpeg command for debugging
+    logger.debug({ command: 'ffmpeg ' + args.map(a => a.includes(' ') ? `"${a}"` : a).join(' ') }, 'Running FFmpeg');
+    
     const process = spawn('ffmpeg', args);
 
     let stderr = '';
