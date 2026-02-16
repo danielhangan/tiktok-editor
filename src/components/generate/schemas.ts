@@ -4,7 +4,8 @@ import { createRoute } from '@hono/zod-openapi';
 const CombinationSchema = z.object({
   reactionId: z.string(),
   demoId: z.string(),
-  hookIndex: z.number()
+  hookIndex: z.number(),
+  musicId: z.string().optional()
 });
 
 const TextSettingsSchema = z.object({

@@ -20,15 +20,6 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
     const batchId = randomUUID();
     const jobIds: string[] = [];
 
-    // Get music file if specified
-    let musicPath: string | undefined;
-    if (audioSettings?.musicId) {
-      const musicFile = getFile('music', audioSettings.musicId, sessionId);
-      if (musicFile) {
-        musicPath = musicFile.path;
-      }
-    }
-
     for (let i = 0; i < combinations.length; i++) {
       const combo = combinations[i];
       const reaction = getFile('reactions', combo.reactionId, sessionId);
@@ -38,6 +29,16 @@ export function registerGenerateRoutes(app: OpenAPIHono) {
       if (!reaction || !demo) {
         logger.warn({ combo, sessionId }, 'Missing files for combination');
         continue;
+      }
+
+      // Get music file - per combination or from audioSettings
+      let musicPath: string | undefined;
+      const musicId = combo.musicId || audioSettings?.musicId;
+      if (musicId) {
+        const musicFile = getFile('music', musicId, sessionId);
+        if (musicFile) {
+          musicPath = musicFile.path;
+        }
       }
 
       const outputPath = getOutputPath(batchId, i + 1, sessionId);

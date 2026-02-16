@@ -114,7 +114,14 @@ function App() {
     for (const reaction of reactions) {
       for (const demo of demos) {
         const hookIndex = hooks.length ? Math.floor(Math.random() * hooks.length) : -1
-        combinations.push({ reactionId: reaction.id, demoId: demo.id, hookIndex })
+        // Random music assignment per video
+        let musicId = undefined
+        if (selectedMusic === 'random' && music.length > 0) {
+          musicId = music[Math.floor(Math.random() * music.length)].id
+        } else if (selectedMusic && selectedMusic !== 'random') {
+          musicId = selectedMusic
+        }
+        combinations.push({ reactionId: reaction.id, demoId: demo.id, hookIndex, musicId })
       }
     }
     
@@ -127,7 +134,7 @@ function App() {
         body: JSON.stringify({
           combinations,
           textSettings: { maxWidthPercent: 60, fontSize: 38, align: 'center', position: 'center' },
-          audioSettings: selectedMusic ? { musicId: selectedMusic, musicVolume: parseFloat(musicVolume) } : undefined
+          audioSettings: { musicVolume: parseFloat(musicVolume) }
         })
       })
       
@@ -335,6 +342,7 @@ function App() {
                     className="h-10 px-3 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     <option value="">No music</option>
+                    <option value="random">🎲 Random</option>
                     {music.map(m => (
                       <option key={m.id} value={m.id}>{m.originalName}</option>
                     ))}
