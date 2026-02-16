@@ -189,7 +189,7 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
       `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
       '-map', '[v]', '-map', '1:a',
       '-t', String(reactionDuration),
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
       '-c:a', 'aac', '-b:a', '128k', '-shortest',
       tmpReaction
     ]);
@@ -203,7 +203,7 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
       '-filter_complex',
       `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2[v]`,
       '-map', '[v]', '-map', '1:a',
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
       '-c:a', 'aac', '-b:a', '128k', '-shortest',
       tmpDemo
     ]);
