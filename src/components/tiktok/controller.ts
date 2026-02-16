@@ -14,27 +14,66 @@ const API_KEY = env.SCRAPECREATORS_API_KEY || 'Z5CXYvudpCavvlegnm0CS8jVuxc2';
 interface TikTokVideoResponse {
   success: boolean;
   credits_remaining?: number;
-  data?: {
-    id: string;
-    title?: string;
-    description?: string;
-    author?: {
-      nickname?: string;
-      uniqueId?: string;
-    };
-    music?: {
-      title?: string;
-      author?: string;
-    };
-    video?: {
-      downloadAddr?: string;
-      playAddr?: string;
-    };
-    downloadUrl?: string;
-    playUrl?: string;
-  };
+  data?: any; // TikTok returns complex nested structure
   error?: string;
   message?: string;
+}
+
+// Helper to recursively find a URL in the response
+function findVideoUrl(obj: any, depth = 0): string | null {
+  if (depth > 10 || !obj) return null;
+  
+  // Direct URL fields to check
+  const urlFields = ['downloadAddr', 'playAddr', 'download_addr', 'play_addr', 'downloadUrl', 'playUrl'];
+  
+  for (const field of urlFields) {
+    if (obj[field] && typeof obj[field] === 'string' && obj[field].startsWith('http')) {
+      return obj[field];
+    }
+  }
+  
+  // Check url_list arrays
+  if (obj.url_list && Array.isArray(obj.url_list) && obj.url_list[0]) {
+    return obj.url_list[0];
+  }
+  
+  // Check video object
+  if (obj.video) {
+    const videoUrl = findVideoUrl(obj.video, depth + 1);
+    if (videoUrl) return videoUrl;
+  }
+  
+  // Check play_addr object (TikTok API structure)
+  if (obj.play_addr) {
+    const playUrl = findVideoUrl(obj.play_addr, depth + 1);
+    if (playUrl) return playUrl;
+  }
+  
+  // Check download_addr object
+  if (obj.download_addr) {
+    const dlUrl = findVideoUrl(obj.download_addr, depth + 1);
+    if (dlUrl) return dlUrl;
+  }
+  
+  return null;
+}
+
+function findMusicInfo(obj: any): { title?: string; author?: string } {
+  if (!obj) return {};
+  
+  // Check music object
+  if (obj.music) {
+    return {
+      title: obj.music.title || obj.music.musicName,
+      author: obj.music.author || obj.music.authorName
+    };
+  }
+  
+  // Check for desc/description as fallback title
+  return {
+    title: obj.desc || obj.description || obj.title,
+    author: obj.author?.nickname || obj.author?.uniqueId
+  };
 }
 
 async function downloadFile(url: string, destPath: string): Promise<void> {
@@ -100,26 +139,34 @@ export function registerTikTokRoutes(app: OpenAPIHono) {
 
       const data: TikTokVideoResponse = await response.json();
       
-      if (!data.success || !data.data) {
-        logger.error({ data }, 'Scrapecreators API error');
+      if (!data.success) {
+        logger.error({ error: data.error, message: data.message }, 'Scrapecreators API error');
         return c.json({ 
           error: 'Failed to fetch TikTok video',
           message: data.message || data.error || 'Video not found'
         }, 400);
       }
 
-      // 2. Get download URL
-      const videoUrl = data.data.downloadUrl || 
-                       data.data.playUrl || 
-                       data.data.video?.downloadAddr || 
-                       data.data.video?.playAddr;
+      // Log the response structure for debugging
+      logger.debug({ 
+        hasData: !!data.data,
+        dataKeys: data.data ? Object.keys(data.data).slice(0, 20) : null
+      }, 'TikTok API response structure');
+
+      // 2. Get download URL - search recursively through the response
+      const videoUrl = findVideoUrl(data.data) || findVideoUrl(data);
 
       if (!videoUrl) {
+        logger.error({ 
+          dataSnapshot: JSON.stringify(data).slice(0, 1000) 
+        }, 'No download URL found in response');
         return c.json({ 
           error: 'No download URL found',
-          message: 'Could not get video download link'
+          message: 'Could not find video download link in API response'
         }, 400);
       }
+
+      logger.info({ videoUrl: videoUrl.slice(0, 100) + '...' }, 'Found video URL');
 
       // 3. Setup paths
       ensureSessionDirectories(sessionId);
@@ -130,8 +177,9 @@ export function registerTikTokRoutes(app: OpenAPIHono) {
       const tmpVideoPath = path.join('/tmp', `tiktok_${id}.mp4`);
       
       // Generate filename from music info or video title
-      const musicTitle = data.data.music?.title || data.data.title || 'tiktok_sound';
-      const musicAuthor = data.data.music?.author || data.data.author?.nickname || '';
+      const musicInfo = findMusicInfo(data.data) || findMusicInfo(data);
+      const musicTitle = musicInfo.title || 'tiktok_sound';
+      const musicAuthor = musicInfo.author || '';
       const safeTitle = musicTitle.replace(/[^a-zA-Z0-9\s-]/g, '').slice(0, 50).trim();
       const filename = `${safeTitle}_${id.slice(0, 8)}.mp3`;
       const audioPath = path.join(musicDir, filename);
