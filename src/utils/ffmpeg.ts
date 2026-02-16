@@ -70,24 +70,10 @@ function wrapText(text: string, options: TextOptions): string {
   return lines.filter(line => line.length > 0).join('\n');
 }
 
-function escapeFFmpegText(text: string): string {
-  // FFmpeg drawtext filter escaping
-  // Note: FFmpeg filter syntax does its own unescaping, so newlines need \\n
-  
-  // 1. Escape backslashes first
-  let escaped = text.replace(/\\/g, '\\\\\\\\');
-  
-  // 2. Escape single quotes for FFmpeg filter syntax
-  escaped = escaped.replace(/'/g, "\\\\'");
-  
-  // 3. Escape colons (FFmpeg filter option separator)
-  escaped = escaped.replace(/:/g, '\\\\:');
-  
-  // 4. Convert newlines - need double backslash for FFmpeg filter parsing
-  // FFmpeg filter unescapes \\n -> \n, then drawtext interprets \n as newline
-  escaped = escaped.replace(/\n/g, '\\\\n');
-  
-  return escaped;
+function escapeFFmpegTextForFile(text: string): string {
+  // When using textfile, we just need to handle FFmpeg's text expansion
+  // Disable expansion by escaping % signs
+  return text.replace(/%/g, '%%');
 }
 
 function runFFmpeg(args: string[]): Promise<void> {
@@ -170,15 +156,19 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
   const concatList = outputPath.replace('.mp4', '_concat.txt');
 
   const wrappedText = wrapText(hookText, { maxWidthPercent: textMaxWidthPercent, fontSize, width });
-  const escapedText = escapeFFmpegText(wrappedText);
+  const textForFile = escapeFFmpegTextForFile(wrappedText);
   
   const textX = getTextXPosition(textAlign, textMaxWidthPercent);
   const textY = getTextYPosition(textPosition, height);
 
+  // Write text to temp file (avoids FFmpeg escaping hell)
+  const textFilePath = outputPath.replace('.mp4', '_text.txt');
+  fs.writeFileSync(textFilePath, textForFile, 'utf-8');
+
   logger.info({ 
     hookText, 
     wrappedText: wrappedText.replace(/\n/g, '|NEWLINE|'),
-    escapedText,
+    textFilePath,
     maxCharsPerLine: Math.floor((width * textMaxWidthPercent / 100) / (fontSize * 0.55)),
     textMaxWidthPercent, 
     textAlign, 
@@ -196,7 +186,7 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
       '-i', reactionPath,
       '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
       '-filter_complex',
-      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=text='${escapedText}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
+      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,trim=0:${reactionDuration},setpts=PTS-STARTPTS,drawtext=textfile='${textFilePath}':fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=${fontSize}:fontcolor=white:borderw=2:bordercolor=black:x=${textX}:y=${textY}[v]`,
       '-map', '[v]', '-map', '1:a',
       '-t', String(reactionDuration),
       '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
@@ -233,7 +223,7 @@ export async function generateTikTokVideo(data: GenerateVideoData): Promise<stri
     return outputPath;
   } finally {
     // Cleanup temp files
-    [tmpReaction, tmpDemo, concatList].forEach((f) => {
+    [tmpReaction, tmpDemo, concatList, textFilePath].forEach((f) => {
       if (fs.existsSync(f)) {
         try {
           fs.unlinkSync(f);
