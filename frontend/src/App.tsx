@@ -26,6 +26,124 @@ interface Output {
   size: number
 }
 
+// Template preview with trim support
+function TemplatePreview({ url, startTime = 0, duration }: {
+  url: string;
+  startTime?: number;
+  duration?: number;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  
+  useEffect(() => {
+    if (videoRef.current && startTime > 0) {
+      videoRef.current.currentTime = startTime
+    }
+  }, [startTime, url])
+  
+  // Handle duration limit - loop within the trim range
+  useEffect(() => {
+    if (!videoRef.current) return
+    
+    const handleTimeUpdate = () => {
+      if (videoRef.current) {
+        if (duration && videoRef.current.currentTime >= startTime + duration) {
+          videoRef.current.currentTime = startTime
+        }
+      }
+    }
+    
+    videoRef.current.addEventListener('timeupdate', handleTimeUpdate)
+    return () => videoRef.current?.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [startTime, duration, url])
+  
+  return (
+    <video
+      ref={videoRef}
+      src={url}
+      className="absolute inset-0 w-full h-full object-cover"
+      autoPlay
+      loop
+      muted
+      playsInline
+      controlsList="nodownload nofullscreen noremoteplayback"
+      disablePictureInPicture
+      onContextMenu={(e) => e.preventDefault()}
+      onLoadedMetadata={() => {
+        if (videoRef.current && startTime > 0) {
+          videoRef.current.currentTime = startTime
+        }
+      }}
+    />
+  )
+}
+
+// Demo preview component with trim support
+function DemoPreview({ demoId, startTime = 0, duration }: { 
+  demoId: string; 
+  startTime?: number;
+  duration?: number;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isHovering, setIsHovering] = useState(false)
+  
+  useEffect(() => {
+    if (videoRef.current && startTime > 0) {
+      videoRef.current.currentTime = startTime
+    }
+  }, [startTime, demoId])
+  
+  // Handle duration limit
+  useEffect(() => {
+    if (!videoRef.current || !duration) return
+    
+    const handleTimeUpdate = () => {
+      if (videoRef.current && videoRef.current.currentTime >= startTime + duration) {
+        videoRef.current.currentTime = startTime
+      }
+    }
+    
+    videoRef.current.addEventListener('timeupdate', handleTimeUpdate)
+    return () => videoRef.current?.removeEventListener('timeupdate', handleTimeUpdate)
+  }, [startTime, duration, demoId])
+  
+  return (
+    <div 
+      className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-44"
+      onMouseEnter={() => {
+        setIsHovering(true)
+        videoRef.current?.play()
+      }}
+      onMouseLeave={() => {
+        setIsHovering(false)
+        videoRef.current?.pause()
+      }}
+    >
+      <video
+        ref={videoRef}
+        key={demoId}
+        src={`/api/files/demos/${demoId}/preview`}
+        className="w-full h-full object-cover"
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedMetadata={() => {
+          if (videoRef.current && startTime > 0) {
+            videoRef.current.currentTime = startTime
+          }
+        }}
+      />
+      <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+        Demo {duration ? `(${duration}s)` : ''}
+      </div>
+      {!isHovering && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <Play className="w-8 h-8 text-white/80" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Template thumbnail with lazy video loading
 function TemplateThumb({ template, selected, onSelect }: { 
   template: { id: string; url: string; thumb?: string }; 
@@ -641,16 +759,10 @@ function App() {
                 {selectedTemplateData ? (
                   <>
                     {/* Template video with text overlay */}
-                    <video
-                      src={selectedTemplateData.url}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      controlsList="nodownload nofullscreen noremoteplayback"
-                      disablePictureInPicture
-                      onContextMenu={(e) => e.preventDefault()}
+                    <TemplatePreview 
+                      url={selectedTemplateData.url}
+                      startTime={templateStart ? parseFloat(templateStart) : 0}
+                      duration={templateDuration ? parseFloat(templateDuration) : undefined}
                     />
                     
                     {/* Text overlay */}
@@ -706,27 +818,14 @@ function App() {
               </div>
               
               {/* Demo preview below */}
-              {demos.length > 0 && (
+              {demos.length > 0 && selectedDemo && (
                 <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-2">
-                    {selectedDemo ? 'Selected Demo:' : 'Click a demo to preview →'}
-                  </p>
-                  {selectedDemo && (
-                    <div className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-40">
-                      <video
-                        key={selectedDemo}
-                        src={`/api/files/demos/${selectedDemo}/preview`}
-                        className="w-full h-full object-cover"
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                      />
-                      <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                        Call to Action
-                      </div>
-                    </div>
-                  )}
+                  <p className="text-xs text-muted-foreground mb-2">Then plays → Call to Action:</p>
+                  <DemoPreview 
+                    demoId={selectedDemo} 
+                    startTime={demoStart ? parseFloat(demoStart) : 0}
+                    duration={demoDuration ? parseFloat(demoDuration) : undefined}
+                  />
                 </div>
               )}
               
