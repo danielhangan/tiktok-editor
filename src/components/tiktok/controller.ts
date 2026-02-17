@@ -8,7 +8,7 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 
 const SCRAPECREATORS_API = 'https://api.scrapecreators.com/v2/tiktok/video';
-const API_KEY = env.SCRAPECREATORS_API_KEY || 'Z5CXYvudpCavvlegnm0CS8jVuxc2';
+const API_KEY = env.SCRAPECREATORS_API_KEY;
 
 interface TikTokResponse {
   success: boolean;
