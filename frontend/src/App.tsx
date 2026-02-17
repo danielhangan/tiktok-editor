@@ -33,46 +33,49 @@ function TemplatePreview({ url, startTime = 0, duration }: {
   duration?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const endTime = duration ? startTime + duration : undefined
   
+  // Set initial position and handle looping manually
   useEffect(() => {
-    if (videoRef.current && startTime > 0) {
-      videoRef.current.currentTime = startTime
-    }
-  }, [startTime, url])
-  
-  // Handle duration limit - loop within the trim range
-  useEffect(() => {
-    if (!videoRef.current) return
+    const video = videoRef.current
+    if (!video) return
+    
+    video.currentTime = startTime
     
     const handleTimeUpdate = () => {
-      if (videoRef.current) {
-        if (duration && videoRef.current.currentTime >= startTime + duration) {
-          videoRef.current.currentTime = startTime
-        }
+      // If we have an end time and passed it, loop back to start
+      if (endTime && video.currentTime >= endTime) {
+        video.currentTime = startTime
       }
     }
     
-    videoRef.current.addEventListener('timeupdate', handleTimeUpdate)
-    return () => videoRef.current?.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [startTime, duration, url])
+    const handleEnded = () => {
+      // When video ends, loop back to start time
+      video.currentTime = startTime
+      video.play()
+    }
+    
+    video.addEventListener('timeupdate', handleTimeUpdate)
+    video.addEventListener('ended', handleEnded)
+    
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('ended', handleEnded)
+    }
+  }, [startTime, endTime, url])
   
   return (
     <video
       ref={videoRef}
+      key={`${url}-${startTime}-${duration}`}
       src={url}
       className="absolute inset-0 w-full h-full object-cover"
       autoPlay
-      loop
       muted
       playsInline
       controlsList="nodownload nofullscreen noremoteplayback"
       disablePictureInPicture
       onContextMenu={(e) => e.preventDefault()}
-      onLoadedMetadata={() => {
-        if (videoRef.current && startTime > 0) {
-          videoRef.current.currentTime = startTime
-        }
-      }}
     />
   )
 }
@@ -84,58 +87,62 @@ function DemoPreview({ demoId, startTime = 0, duration }: {
   duration?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isHovering, setIsHovering] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const endTime = duration ? startTime + duration : undefined
   
+  // Handle trim and looping
   useEffect(() => {
-    if (videoRef.current && startTime > 0) {
-      videoRef.current.currentTime = startTime
-    }
-  }, [startTime, demoId])
-  
-  // Handle duration limit
-  useEffect(() => {
-    if (!videoRef.current || !duration) return
+    const video = videoRef.current
+    if (!video) return
+    
+    video.currentTime = startTime
     
     const handleTimeUpdate = () => {
-      if (videoRef.current && videoRef.current.currentTime >= startTime + duration) {
-        videoRef.current.currentTime = startTime
+      if (endTime && video.currentTime >= endTime) {
+        video.currentTime = startTime
       }
     }
     
-    videoRef.current.addEventListener('timeupdate', handleTimeUpdate)
-    return () => videoRef.current?.removeEventListener('timeupdate', handleTimeUpdate)
-  }, [startTime, duration, demoId])
+    const handleEnded = () => {
+      video.currentTime = startTime
+      if (isPlaying) video.play()
+    }
+    
+    video.addEventListener('timeupdate', handleTimeUpdate)
+    video.addEventListener('ended', handleEnded)
+    
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+      video.removeEventListener('ended', handleEnded)
+    }
+  }, [startTime, endTime, demoId, isPlaying])
   
   return (
     <div 
-      className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-44"
-      onMouseEnter={() => {
-        setIsHovering(true)
-        videoRef.current?.play()
-      }}
-      onMouseLeave={() => {
-        setIsHovering(false)
-        videoRef.current?.pause()
+      className="relative aspect-[9/16] bg-black rounded-lg overflow-hidden max-h-44 cursor-pointer"
+      onClick={() => {
+        if (isPlaying) {
+          videoRef.current?.pause()
+          setIsPlaying(false)
+        } else {
+          videoRef.current?.play()
+          setIsPlaying(true)
+        }
       }}
     >
       <video
         ref={videoRef}
-        key={demoId}
+        key={`${demoId}-${startTime}-${duration}`}
         src={`/api/files/demos/${demoId}/preview`}
         className="w-full h-full object-cover"
         muted
         playsInline
-        preload="metadata"
-        onLoadedMetadata={() => {
-          if (videoRef.current && startTime > 0) {
-            videoRef.current.currentTime = startTime
-          }
-        }}
+        preload="auto"
       />
       <div className="absolute top-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-        Demo {duration ? `(${duration}s)` : ''}
+        Demo {duration ? `(${startTime}s → ${startTime + duration}s)` : ''}
       </div>
-      {!isHovering && (
+      {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30">
           <Play className="w-8 h-8 text-white/80" />
         </div>
@@ -817,12 +824,16 @@ function App() {
                 )}
               </div>
               
-              {/* Demo preview below */}
-              {demos.length > 0 && selectedDemo && (
+              {/* Demo preview below - show first demo if none selected */}
+              {demos.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-xs text-muted-foreground mb-2">Then plays → Call to Action:</p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 h-px bg-border"></div>
+                    <p className="text-xs text-muted-foreground">↓ then plays ↓</p>
+                    <div className="flex-1 h-px bg-border"></div>
+                  </div>
                   <DemoPreview 
-                    demoId={selectedDemo} 
+                    demoId={selectedDemo || demos[0].id} 
                     startTime={demoStart ? parseFloat(demoStart) : 0}
                     duration={demoDuration ? parseFloat(demoDuration) : undefined}
                   />
