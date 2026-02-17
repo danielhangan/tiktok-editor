@@ -2,13 +2,69 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import { createRoute, z } from '@hono/zod-openapi';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 import { logger } from '~/config/logger.js';
 
 const LIBRARY_DIR = './library/reactions';
+const THUMBS_DIR = './library/thumbs';
 
 // In-memory cache for library metadata (fast, doesn't need Redis)
 let libraryCache: { files: any[]; cachedAt: number } | null = null;
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+// Generate thumbnail if it doesn't exist
+async function ensureThumbnail(videoPath: string, thumbPath: string): Promise<void> {
+  if (fs.existsSync(thumbPath)) return;
+  
+  // Create thumbs directory if needed
+  const thumbDir = path.dirname(thumbPath);
+  if (!fs.existsSync(thumbDir)) {
+    fs.mkdirSync(thumbDir, { recursive: true });
+  }
+  
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', [
+      '-y',
+      '-i', videoPath,
+      '-ss', '0.5',  // 0.5 seconds in
+      '-vframes', '1',
+      '-vf', 'scale=150:-1',  // 150px wide, maintain aspect
+      '-q:v', '5',  // Quality (lower = better, 2-5 is good)
+      thumbPath
+    ]);
+    
+    ffmpeg.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`FFmpeg exited with code ${code}`));
+    });
+    
+    ffmpeg.on('error', reject);
+  });
+}
+
+// Generate all thumbnails in background
+async function generateAllThumbnails() {
+  if (!fs.existsSync(LIBRARY_DIR)) return;
+  
+  const files = fs.readdirSync(LIBRARY_DIR).filter(f => /\.(mp4|mov)$/i.test(f));
+  
+  for (const filename of files) {
+    const videoPath = path.join(LIBRARY_DIR, filename);
+    const thumbName = filename.replace(/\.(mp4|mov)$/i, '.jpg');
+    const thumbPath = path.join(THUMBS_DIR, thumbName);
+    
+    try {
+      await ensureThumbnail(videoPath, thumbPath);
+    } catch (err) {
+      logger.warn({ filename, error: err }, 'Failed to generate thumbnail');
+    }
+  }
+  
+  logger.info({ count: files.length }, 'Thumbnails generated');
+}
+
+// Generate thumbnails on startup
+generateAllThumbnails().catch(err => logger.error({ err }, 'Thumbnail generation failed'));
 
 const listLibraryRoute = createRoute({
   method: 'get',
@@ -31,6 +87,25 @@ const listLibraryRoute = createRoute({
 });
 
 export function registerLibraryRoutes(app: OpenAPIHono) {
+  // Serve thumbnails (fast, small images)
+  app.get('/library/thumbs/:filename', async (c) => {
+    const filename = c.req.param('filename');
+    const filePath = path.join(THUMBS_DIR, filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+    
+    const file = fs.readFileSync(filePath);
+    
+    return new Response(file, {
+      headers: { 
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }
+    });
+  });
+
   // Serve library files statically with aggressive caching
   app.get('/library/reactions/:filename', async (c) => {
     const filename = c.req.param('filename');
@@ -82,12 +157,14 @@ export function registerLibraryRoutes(app: OpenAPIHono) {
         const filePath = path.join(LIBRARY_DIR, filename);
         const stats = fs.statSync(filePath);
         const id = `lib_${filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const thumbName = filename.replace(/\.(mp4|mov)$/i, '.jpg');
         
         return {
           id,
           filename,
           size: stats.size,
-          url: `/library/reactions/${encodeURIComponent(filename)}`
+          url: `/library/reactions/${encodeURIComponent(filename)}`,
+          thumb: `/library/thumbs/${encodeURIComponent(thumbName)}`
         };
       });
 

@@ -57,8 +57,9 @@ COPY --chown=nodejs:nodejs public ./public
 # Copy React frontend build
 COPY --from=frontend-build --chown=nodejs:nodejs /app/public-react ./public-react
 
-# Copy stock library
+# Copy stock library (thumbs generated at startup if missing)
 COPY --chown=nodejs:nodejs library ./library
+RUN mkdir -p ./library/thumbs && chown nodejs:nodejs ./library/thumbs
 
 # Add entrypoint script (fixes volume permissions at runtime)
 COPY docker-entrypoint.sh /usr/local/bin/

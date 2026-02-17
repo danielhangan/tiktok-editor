@@ -16,6 +16,7 @@ interface LibraryFile {
   filename: string
   size: number
   url: string
+  thumb?: string
 }
 
 interface Output {
@@ -23,6 +24,79 @@ interface Output {
   filename: string
   url: string
   size: number
+}
+
+// Template thumbnail with lazy video loading
+function TemplateThumb({ template, selected, onSelect }: { 
+  template: { id: string; url: string; thumb?: string }; 
+  selected: boolean; 
+  onSelect: () => void 
+}) {
+  const [showVideo, setShowVideo] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  
+  return (
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setShowVideo(true)}
+      onMouseLeave={() => {
+        setShowVideo(false)
+        if (videoRef.current) {
+          videoRef.current.pause()
+          videoRef.current.currentTime = 0
+        }
+      }}
+      className={cn(
+        "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all select-none",
+        selected 
+          ? "ring-2 ring-primary ring-offset-2" 
+          : "hover:ring-2 hover:ring-muted-foreground/50"
+      )}
+    >
+      {/* Thumbnail (always visible, loads fast) */}
+      {template.thumb && (
+        <img 
+          src={template.thumb} 
+          alt="" 
+          className={cn(
+            "absolute inset-0 w-full h-full object-cover",
+            showVideo && "opacity-0"
+          )}
+          loading="lazy"
+        />
+      )}
+      
+      {/* Video (only loads on hover) */}
+      {showVideo && (
+        <video
+          ref={videoRef}
+          src={template.url}
+          className="absolute inset-0 w-full h-full object-cover"
+          muted
+          playsInline
+          autoPlay
+          loop
+          controlsList="nodownload nofullscreen noremoteplayback"
+          disablePictureInPicture
+          onContextMenu={(e) => e.preventDefault()}
+        />
+      )}
+      
+      {/* Fallback if no thumb */}
+      {!template.thumb && !showVideo && (
+        <div className="absolute inset-0 bg-muted animate-pulse" />
+      )}
+      
+      {/* Selected checkmark */}
+      {selected && (
+        <div className="absolute inset-0 bg-primary/20 flex items-center justify-center pointer-events-none">
+          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
+            <span className="text-white text-xs">✓</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Video player for outputs
@@ -424,36 +498,12 @@ function App() {
               
               <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto">
                 {allTemplates.map(t => (
-                  <div
-                    key={t.id}
-                    onClick={() => setSelectedTemplate(t.id)}
-                    className={cn(
-                      "relative aspect-square rounded-xl overflow-hidden cursor-pointer transition-all select-none",
-                      selectedTemplate === t.id 
-                        ? "ring-2 ring-primary ring-offset-2" 
-                        : "hover:ring-2 hover:ring-muted-foreground/50"
-                    )}
-                  >
-                    <video
-                      src={t.url}
-                      className="w-full h-full object-cover pointer-events-none"
-                      muted
-                      playsInline
-                      preload="metadata"
-                      controlsList="nodownload nofullscreen noremoteplayback"
-                      disablePictureInPicture
-                      onContextMenu={(e) => e.preventDefault()}
-                      onMouseEnter={(e) => e.currentTarget.play()}
-                      onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0 }}
-                    />
-                    {selectedTemplate === t.id && (
-                      <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
-                        <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                          <span className="text-white text-xs">✓</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <TemplateThumb 
+                    key={t.id} 
+                    template={t} 
+                    selected={selectedTemplate === t.id}
+                    onSelect={() => setSelectedTemplate(t.id)}
+                  />
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
